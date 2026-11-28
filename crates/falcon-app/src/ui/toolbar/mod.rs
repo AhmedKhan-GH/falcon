@@ -87,7 +87,7 @@ impl App {
         let toggle_reserved = if !self.show_inspector { 44.0 } else { 16.0 };
         let search_right = bar.right() - toggle_reserved;
 
-        let mut num_icons = 3.0; // Filter, Layout, Plugins
+        let mut num_icons = 4.0; // Filter, Layout, Plugins, Save from the browser
         if self.ai_view_allowed() { num_icons += 1.0; }
         if refresh { num_icons += 1.0; }
         if self.ws.scope != Scope::AllTags { num_icons += 1.0; }
@@ -136,6 +136,8 @@ impl App {
             }
             ix -= 26.0;
         }
+        self.browser_button(ui, Pos2::new(ix, cy));
+        ix -= 26.0;
         icon_button(ui, Pos2::new(ix, cy), ic::PUZZLE_PIECE, 18.0, false, tr("Plugins"));
         let icons_left = ix - 20.0;
 
@@ -248,6 +250,44 @@ impl App {
                 self.show_inspector = !self.show_inspector;
             }
         });
+    }
+
+    /// "Save from the browser": starts or stops the 10-minute session the
+    /// Eagle browser extension needs, without going into Preferences. Every
+    /// save still asks for confirmation (`import_confirm_modal`).
+    fn browser_button(&mut self, ui: &mut Ui, center: Pos2) {
+        let left = self.prefs_window.session_remaining;
+        let tip = match left {
+            Some(s) => trf("Session active: {time} left.", &[("time", &format!("{}:{:02}", s / 60, s % 60))]),
+            None => tr("Save from the browser").to_string(),
+        };
+        let b = icon_button(ui, center, ic::GLOBE, 18.0, true, &tip);
+        if left.is_some() {
+            let r = Rect::from_center_size(center, Vec2::splat(26.0));
+            ui.painter().rect_stroke(r, t::RADIUS, Stroke::new(1.5, t::p().primary), StrokeKind::Inside);
+        }
+        let mut start = false;
+        let mut stop = false;
+        egui::Popup::menu(&b).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+            ui.set_width(260.0);
+            ui.label(egui::RichText::new(tr("Save from the browser")).strong());
+            ui.add_space(2.0);
+            ui.label(egui::RichText::new(tr("Lets the Eagle browser extension list your folders and send images to this library. Every save asks you to confirm here. Ends after 10 minutes.")).size(11.5).color(t::p().text_muted));
+            ui.add_space(6.0);
+            match self.prefs_window.session_remaining {
+                Some(s) => {
+                    ui.label(trf("Session active: {time} left.", &[("time", &format!("{}:{:02}", s / 60, s % 60))]));
+                    stop = ui.button(tr("Stop session")).clicked();
+                }
+                None => start = ui.button(tr("Start 10-minute session")).clicked(),
+            }
+        });
+        if start {
+            self.start_browser_session();
+        }
+        if stop {
+            self.stop_browser_session();
+        }
     }
 
     /// The AI Search button: a highlight while the search box reads

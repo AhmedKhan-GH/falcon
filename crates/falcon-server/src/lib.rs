@@ -116,7 +116,7 @@ struct PendingEntry {
 }
 
 /// How long an import waits for a decision before it is refused.
-const CONFIRM_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
+const CONFIRM_WAIT: std::time::Duration = std::time::Duration::from_secs(18);
 
 /// What is kept of a request for diagnosing browser-integration problems:
 /// who sent it (as the browser labelled it), what it asked, and what was
@@ -697,7 +697,10 @@ fn handle(lib: &Shared, state: &State, port: u16, legacy: bool, mut req: Request
     let mut why = "served";
     if verdict == policy::Verdict::Confirm {
         let site = match &kind {
-            policy::Kind::Extension(o) => o.clone(),
+            policy::Kind::Extension(o) => {
+                let label = if o.starts_with("safari-") { "Safari extension" } else if o.starts_with("moz-") { "Firefox extension" } else { "Browser extension" };
+                format!("{label} {o}")
+            }
             _ => "browser".to_string(),
         };
         let referer = if row.referer.is_empty() { String::new() } else { format!(" (page {})", row.referer) };
@@ -707,6 +710,13 @@ fn handle(lib: &Shared, state: &State, port: u16, legacy: bool, mut req: Request
             return state.record(row);
         }
         why = "import confirmed";
+        // Confirming once lets this extension read folder and tag names for the rest of the session.
+        if let policy::Kind::Extension(o) = &kind {
+            let mut s = state.session.lock().unwrap_or_else(|p| p.into_inner());
+            if let Some(s) = s.as_mut() {
+                s.origins.insert(o.clone());
+            }
+        }
     }
     let reply = match path.as_str() {
         _ if verdict == policy::Verdict::Session => {

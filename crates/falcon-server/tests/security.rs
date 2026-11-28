@@ -594,11 +594,8 @@ fn legacy_extension_api_saves_only_through_an_approved_session_with_confirmation
     assert_eq!(form_post(port, &opaque(), &fields).code, 403, "no Origin: not the extension");
     assert_eq!(form_post(port, &web("https://id.pinterest.com"), &fields).code, 403);
     e.server.start_session(600);
-    assert_eq!(form_post(port, &h, &fields).code, 403, "a session alone doesn't approve an origin");
     assert_eq!(e.items(), 0);
-
-    assert!(e.server.approve_session_origin(ext));
-    // Declined, then confirmed.
+    // Declined, then confirmed. The first request from this extension is held for confirmation too.
     let mut codes = Vec::new();
     for accept in [false, true] {
         let (src2, open, hh) = (src.clone(), e.open.clone(), h);
@@ -618,6 +615,8 @@ fn legacy_extension_api_saves_only_through_an_approved_session_with_confirmation
         codes.push(t.join().unwrap());
     }
     assert_eq!(codes, [403, 200]);
+    // Confirming once approved the extension for the rest of the session.
+    assert_eq!(raw(e.port(), "GET", "/api/folder/list", &[("Origin", ext), ("Sec-Fetch-Site", "none")], None).code, 200);
     let lib = e.lib.lock().unwrap();
     assert_eq!(lib.items().len(), 1);
     let item = &lib.items()[0];

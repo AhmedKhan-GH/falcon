@@ -206,6 +206,9 @@ pub fn decide(tier: Tier, kind: &Kind, approved: &HashSet<String>, token_ok: boo
             Tier::Import => Verdict::Confirm,
             _ => Verdict::Forbidden("Not available in a browser import session."),
         },
+        // During a session an unknown extension's import is not refused: it is held for the
+        // user's confirmation, which shows who is asking (an extension origin can't be forged by a page).
+        Kind::Extension(_) if session.active && tier == Tier::Import => Verdict::Confirm,
         Kind::Opaque if session_read => Verdict::Session,
         Kind::Opaque | Kind::Extension(_) | Kind::Website => refused,
     }
@@ -377,10 +380,14 @@ mod tests {
         for (t, p) in [(Tier::Mutate, "/api/folder/create"), (Tier::FsPath, "/api/item/addFromPath"), (Tier::Read, "/api/item/list")] {
             assert!(matches!(decide(t, &ext, &approved, false, p, &on), Verdict::Forbidden(_)), "{p}");
         }
+        // An extension not seen before is not refused during a session: its import waits for confirmation.
         let other = Kind::Extension("safari-web-extension://other".into());
-        assert!(matches!(decide(Tier::Import, &other, &approved, false, "/api/item/addFromURL", &on), Verdict::Forbidden(_)));
+        assert_eq!(decide(Tier::Import, &other, &approved, false, "/api/item/addFromURL", &on), Verdict::Confirm);
+        assert!(matches!(decide(Tier::Read, &other, &approved, false, "/api/folder/list", &on), Verdict::Forbidden(_)), "but it reads nothing until it was confirmed once");
+        assert!(matches!(decide(Tier::Mutate, &other, &approved, false, "/api/folder/create", &on), Verdict::Forbidden(_)));
         let off = SessionView { active: false, origins: Some(&so) };
         assert!(matches!(decide(Tier::Import, &ext, &approved, false, "/api/item/addFromURL", &off), Verdict::Forbidden(_)), "an expired session grants nothing");
+        assert!(matches!(decide(Tier::Import, &other, &approved, false, "/api/item/addFromURL", &off), Verdict::Forbidden(_)));
     }
 
     #[test]

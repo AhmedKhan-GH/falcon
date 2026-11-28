@@ -324,62 +324,92 @@ impl App {
                 h.stop_session();
             }
             crate::prefs::CompatStatus::Off
-        } else if let Some(h) = &self.server {
-            let ctx = self.ctx.clone();
-            match h.start_compat(falcon_server::EAGLE_PORT, move || ctx.request_repaint()) {
-                Ok(l) => {
-                    let port = l.port;
-                    self.compat = Some(l);
-                    // The extension saves through its older API on its own port.
-                    let ctx = self.ctx.clone();
-                    self.prefs_window.compat_note = Some(match h.start_legacy(falcon_server::LEGACY_PORT, move || ctx.request_repaint()) {
-                        Ok(l2) => {
-                            self.compat_legacy = Some(l2);
-                            trf("Older extension API on port {port}: listening.", &[("port", &falcon_server::LEGACY_PORT)])
-                        }
-                        Err(e) => trf("Older extension API on port {port} not started: {error}", &[("port", &falcon_server::LEGACY_PORT), ("error", &e.to_string())]),
-                    });
-                    crate::prefs::CompatStatus::Listening(port)
-                }
-                Err(falcon_server::CompatError::InUse(m)) => crate::prefs::CompatStatus::Conflict(m),
-                Err(falcon_server::CompatError::Failed(m)) => crate::prefs::CompatStatus::Failed(m),
-            }
         } else {
-            crate::prefs::CompatStatus::NeedsApi
+            self.start_compat_listeners()
         };
         self.prefs_window.compat_status = self.compat_status.clone();
+    }
+
+    /// Opens the listener on Eagle's port and the one for the extension's
+    /// older API, refusing any port something else already uses.
+    fn start_compat_listeners(&mut self) -> crate::prefs::CompatStatus {
+        let Some(h) = &self.server else { return crate::prefs::CompatStatus::NeedsApi };
+        let ctx = self.ctx.clone();
+        match h.start_compat(falcon_server::EAGLE_PORT, move || ctx.request_repaint()) {
+            Ok(l) => {
+                let port = l.port;
+                self.compat = Some(l);
+                // The extension saves through its older API on its own port.
+                let ctx = self.ctx.clone();
+                self.prefs_window.compat_note = Some(match h.start_legacy(falcon_server::LEGACY_PORT, move || ctx.request_repaint()) {
+                    Ok(l2) => {
+                        self.compat_legacy = Some(l2);
+                        trf("Older extension API on port {port}: listening.", &[("port", &falcon_server::LEGACY_PORT)])
+                    }
+                    Err(e) => trf("Older extension API on port {port} not started: {error}", &[("port", &falcon_server::LEGACY_PORT), ("error", &e.to_string())]),
+                });
+                crate::prefs::CompatStatus::Listening(port)
+            }
+            Err(falcon_server::CompatError::InUse(m)) => crate::prefs::CompatStatus::Conflict(m),
+            Err(falcon_server::CompatError::Failed(m)) => crate::prefs::CompatStatus::Failed(m),
+        }
+    }
+
+    /// The toolbar's "Save from the browser": opens the extension's ports if
+    /// they aren't open and starts a 10-minute session, in one click. Without
+    /// the Preferences switch the ports close again when the session ends.
+    pub(crate) fn start_browser_session(&mut self) {
+        if self.server.is_none() {
+            self.flash_error(tr("Turn on the local API in Preferences ▸ Developer first."));
+            return;
+        }
+        if self.compat.is_none() {
+            self.compat_status = self.start_compat_listeners();
+            self.prefs_window.compat_status = self.compat_status.clone();
+        }
+        match &self.compat_status {
+            crate::prefs::CompatStatus::Conflict(m) | crate::prefs::CompatStatus::Failed(m) => {
+                let m = trf("Not started: {error}", &[("error", m)]);
+                self.compat = None;
+                self.compat_legacy = None;
+                self.flash_error(m);
+            }
+            _ => {
+                if let Some(h) = &self.server {
+                    h.start_session(600);
+                }
+                self.flash(tr("Browser import session started"));
+            }
+        }
+    }
+
+    pub(crate) fn stop_browser_session(&mut self) {
+        if let Some(h) = &self.server {
+            h.stop_session();
+        }
+        self.flash(tr("Browser import session stopped"));
     }
 
     /// Carries out what Preferences asked of the browser import session and
     /// tells it how long is left.
     fn drive_session(&mut self) {
-        let cmd = self.prefs_window.session_cmd.take();
-        let Some(h) = &self.server else {
-            self.prefs_window.session_remaining = None;
-            return;
-        };
-        let mut said = None;
-        match cmd {
-            Some(crate::prefs::SessionCmd::Start) => {
-                h.start_session(600);
-                said = Some(tr("Browser import session started"));
-            }
-            Some(crate::prefs::SessionCmd::Stop) => {
-                h.stop_session();
-                said = Some(tr("Browser import session stopped"));
-            }
-            Some(crate::prefs::SessionCmd::Approve(o)) => {
-                h.approve_session_origin(&o);
-                h.clear_blocked_origin();
-            }
+        match self.prefs_window.session_cmd.take() {
+            Some(crate::prefs::SessionCmd::Start) => self.start_browser_session(),
+            Some(crate::prefs::SessionCmd::Stop) => self.stop_browser_session(),
             None => {}
         }
-        self.prefs_window.session_remaining = h.session_remaining();
-        if self.prefs_window.session_remaining.is_some() && self.prefs_window.open {
+        self.prefs_window.session_remaining = self.server.as_ref().and_then(|h| h.session_remaining());
+        if self.prefs_window.session_remaining.is_some() {
+            // The toolbar and Preferences show a countdown.
             self.ctx.request_repaint_after(std::time::Duration::from_secs(1));
         }
-        if let Some(m) = said {
-            self.flash(m);
+        // Ports opened only for a session close with it.
+        if self.prefs_window.session_remaining.is_none() && !self.prefs.eagle_compat && (self.compat.is_some() || self.compat_legacy.is_some()) {
+            self.compat = None;
+            self.compat_legacy = None;
+            self.compat_status = crate::prefs::CompatStatus::Off;
+            self.prefs_window.compat_status = crate::prefs::CompatStatus::Off;
+            self.prefs_window.compat_note = None;
         }
     }
 
@@ -391,6 +421,7 @@ impl App {
         if self.import_attention != Some(p.id) {
             self.import_attention = Some(p.id);
             ctx.send_viewport_cmd(egui::ViewportCommand::RequestUserAttention(egui::UserAttentionType::Informational));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
         let mut answer = None;
         let modal = egui::Modal::new(egui::Id::unique("browser-import-confirm")).show(ctx, |ui| {

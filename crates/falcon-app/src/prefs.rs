@@ -368,8 +368,6 @@ impl RecentThumbSize {
 pub enum SessionCmd {
     Start,
     Stop,
-    /// Let this extension origin use the running session.
-    Approve(String),
 }
 
 /// What the Developer pane shows and asks about browser integration.
@@ -2070,11 +2068,6 @@ fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<
                 ui.label(RichText::new(trf("Session active: {time} left.", &[("time", &time)])).size(12.0));
                 if ui.button(tr("Stop session")).clicked() {
                     *cmd = Some(SessionCmd::Stop);
-                }
-                if let Some(o) = blocked.and_then(falcon_server::normalize_origin)
-                    && ui.button(trf("Allow {origin} for this session", &[("origin", &o)])).clicked()
-                {
-                    *cmd = Some(SessionCmd::Approve(o));
                 }
             }
             None => {
