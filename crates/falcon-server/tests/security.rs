@@ -623,7 +623,7 @@ fn legacy_extension_api_saves_only_through_an_approved_session_with_confirmation
     let item = &lib.items()[0];
     assert_eq!(item.name, "Pin title", "the title is display text only, sanitized");
     assert_eq!(item.url, "https://id.pinterest.com/pin/1/", "the source page is kept");
-    assert_eq!(item.folders, [e.open.clone()]);
+    assert_eq!(item.folders, std::slice::from_ref(&e.open));
     drop(lib);
 
     // A source that points inside the machine is still refused by the safe download, after confirmation.
