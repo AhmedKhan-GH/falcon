@@ -967,6 +967,8 @@ pub struct Window {
     /// extension origin the API refused, for the Developer pane.
     pub compat_status: CompatStatus,
     pub blocked_origin: Option<String>,
+    /// The API's latest requests, newest first, as text lines (diagnostics).
+    pub recent_requests: Vec<String>,
     recorder: Recorder,
     password: PasswordForm,
     /// The theme and interface size last saved or applied; previewed
@@ -1264,7 +1266,7 @@ impl Window {
             Section::AiSearch => crate::ai_search::pane(p, d, self.ai_search.as_deref()),
             Section::AiModels => self.ai.ui(p, &mut d.prefs.ai_models),
             Section::Mcp => mcp::pane(p, d, &mut self.mcp_port_text, self.mcp_status),
-            Section::Developer => developer(p, d, &mut self.port_text, port_error, &self.compat_status, self.blocked_origin.as_deref()),
+            Section::Developer => developer(p, d, &mut self.port_text, port_error, &self.compat_status, self.blocked_origin.as_deref(), &self.recent_requests),
         }
     }
 
@@ -1944,7 +1946,7 @@ pub fn new_token() -> String {
     format!("{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32])
 }
 
-fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<&String>, compat: &CompatStatus, blocked: Option<&str>) {
+fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<&String>, compat: &CompatStatus, blocked: Option<&str>, recent: &[String]) {
     let pr = &mut d.prefs;
     let first = parse_port(port_text).unwrap_or(pr.api_port);
     p.block(tr_key("API token"), &["api", "token", "key", "auth", "developer", "restful"], |ui| {
@@ -2018,6 +2020,14 @@ fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<
                     pr.approved_extension_origins.push(o);
                 }
             });
+        }
+        if !recent.is_empty() {
+            ui.add_space(6.0);
+            ui.label(RichText::new(tr("Recent API requests")).size(12.0));
+            note(ui, tr("Metadata only: no query strings, bodies, cookies or tokens."));
+            for line in recent {
+                ui.add(egui::Label::new(RichText::new(line).monospace().size(10.0)).selectable(true));
+            }
         }
     });
 }

@@ -338,6 +338,22 @@ impl App {
     pub(crate) fn poll_blocked_origin(&mut self) {
         if self.prefs_window.open {
             self.prefs_window.blocked_origin = self.server.as_ref().and_then(|h| h.blocked_origin());
+            self.prefs_window.recent_requests = self
+                .server
+                .as_ref()
+                .map(|h| {
+                    h.recent_requests()
+                        .iter()
+                        .rev()
+                        .take(10)
+                        .map(|r| {
+                            let t = r.secs % 86400;
+                            let when = format!("{:02}:{:02}:{:02}Z", t / 3600, t / 60 % 60, t % 60);
+                            format!("{when} :{} {} {} origin={} ref={} fetch={} [{}] {} → {} ({})", r.port, r.method, r.path, if r.origin.is_empty() { "-" } else { &r.origin }, if r.referer.is_empty() { "-" } else { &r.referer }, r.fetch, r.flags, r.caller, r.status, r.why)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
         }
     }
 

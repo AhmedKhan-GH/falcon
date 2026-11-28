@@ -388,3 +388,29 @@ fn compatibility_listener_never_takes_an_occupied_port() {
     // The API's own port is never reused.
     assert!(matches!(e.server.start_compat(e.port(), || {}), Err(falcon_server::CompatError::InUse(_))));
 }
+
+#[test]
+fn request_trace_keeps_metadata_only() {
+    let e = env();
+    e.server.set_token("tok-secret-123");
+    let r = e.send(
+        "GET",
+        "/api/library/info?token=tok-secret-123&path=/Users/me/private",
+        &[("Origin", "https://www.pinterest.com/pin/1?x=y"), ("Sec-Fetch-Site", "cross-site"), ("Sec-Fetch-Mode", "cors"), ("Cookie", "session=abc"), ("Authorization", "Bearer zzz")],
+        None,
+    );
+    assert_eq!(r.code, 200, "a valid token is authorization");
+    let _ = e.send("GET", "/api/folder/list", &web("https://evil.example"), None);
+    let rows = e.server.recent_requests();
+    let dump = format!("{rows:?}");
+    for secret in ["tok-secret-123", "/Users/me/private", "session=abc", "Bearer", "zzz", "x=y", "/pin/1"] {
+        assert!(!dump.contains(secret), "{secret} must not be recorded: {dump}");
+    }
+    let last = rows.last().unwrap();
+    assert_eq!((last.method.as_str(), last.path.as_str(), last.origin.as_str(), last.status, last.caller.as_str()), ("GET", "/api/folder/list", "https://evil.example", 403, "website"));
+    assert!(last.why.contains("not allowed"));
+    let first = &rows[rows.len() - 2];
+    assert_eq!(first.origin, "https://www.pinterest.com");
+    assert!(first.flags.contains("cookie") && first.flags.contains("auth"), "presence only: {}", first.flags);
+    assert!(first.fetch.starts_with("cross-site/cors"));
+}

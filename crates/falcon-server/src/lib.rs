@@ -67,6 +67,45 @@ struct State {
     approved_origins: Mutex<HashSet<String>>,
     /// The last extension origin refused for not being approved, so the app can offer it for approval.
     blocked_origin: Mutex<Option<String>>,
+    /// The most recent requests, metadata only (see [`TraceRow`]).
+    trace: Mutex<std::collections::VecDeque<TraceRow>>,
+}
+
+/// What is kept of a request for diagnosing browser-integration problems:
+/// who sent it (as the browser labelled it), what it asked, and what was
+/// answered. Never the query string, body, cookies, credentials or paths.
+#[derive(Clone, Debug)]
+pub struct TraceRow {
+    pub secs: u64,
+    pub port: u16,
+    pub method: String,
+    pub path: String,
+    /// The `Origin` header reduced to scheme://host[:port], or empty.
+    pub origin: String,
+    /// `Sec-Fetch-Site` / `-Mode` / `-Dest`.
+    pub fetch: String,
+    /// The `Referer` reduced to its origin, or empty.
+    pub referer: String,
+    /// Whether the request carried `Cookie`, `Authorization`, or a CORS preflight header.
+    pub flags: String,
+    pub caller: String,
+    pub tier: String,
+    pub status: u16,
+    pub why: String,
+}
+
+const TRACE_KEEP: usize = 60;
+
+/// `scheme://host[:port]` of a URL-ish header value; empty when it is not one.
+fn origin_only(v: &str) -> String {
+    let v: String = v.chars().take(200).collect();
+    match v.split_once("://") {
+        Some((scheme, rest)) if scheme.len() <= 32 && scheme.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '+' || c == '.') => {
+            let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+            format!("{scheme}://{host}")
+        }
+        _ => if v == "null" { "null".into() } else { String::new() },
+    }
 }
 
 impl State {
@@ -80,7 +119,16 @@ impl State {
             ai: Mutex::new(None),
             approved_origins: Mutex::new(HashSet::new()),
             blocked_origin: Mutex::new(None),
+            trace: Mutex::new(std::collections::VecDeque::new()),
         }
+    }
+
+    fn record(&self, row: TraceRow) {
+        let mut t = self.trace.lock().unwrap_or_else(|p| p.into_inner());
+        if t.len() >= TRACE_KEEP {
+            t.pop_front();
+        }
+        t.push_back(row);
     }
 
     fn token_valid(&self, given: Option<&str>) -> bool {
@@ -195,6 +243,12 @@ impl Handle {
     pub fn set_approved_origins(&self, origins: &[String]) {
         let set = origins.iter().filter_map(|o| policy::normalize_origin(o)).collect();
         *self.state.approved_origins.lock().unwrap_or_else(|p| p.into_inner()) = set;
+    }
+
+    /// The most recent requests (newest last), metadata only, for diagnosing
+    /// what a browser client actually sends.
+    pub fn recent_requests(&self) -> Vec<TraceRow> {
+        self.state.trace.lock().unwrap_or_else(|p| p.into_inner()).iter().cloned().collect()
     }
 
     /// The last browser extension origin that was refused because it is not
@@ -369,9 +423,39 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
     let mut args = parse_query(query);
     let method = req.method().clone();
     let (host, origin, site) = (header(&req, "Host"), header(&req, "Origin"), header(&req, "Sec-Fetch-Site"));
+    let mut row = TraceRow {
+        secs: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()),
+        port,
+        method: method.to_string(),
+        path: path.chars().take(80).collect(),
+        origin: origin.as_deref().map(origin_only).unwrap_or_default(),
+        fetch: format!(
+            "{}/{}/{}",
+            site.as_deref().unwrap_or("-"),
+            header(&req, "Sec-Fetch-Mode").as_deref().unwrap_or("-"),
+            header(&req, "Sec-Fetch-Dest").as_deref().unwrap_or("-")
+        ),
+        referer: header(&req, "Referer").as_deref().map(origin_only).unwrap_or_default(),
+        flags: [("Cookie", "cookie"), ("Authorization", "auth"), ("Access-Control-Request-Headers", "acrh"), ("Access-Control-Request-Method", "acrm")]
+            .iter()
+            .filter(|(h, _)| header(&req, h).is_some())
+            .map(|(_, f)| *f)
+            .collect::<Vec<_>>()
+            .join(","),
+        caller: String::new(),
+        tier: String::new(),
+        status: 0,
+        why: String::new(),
+    };
     let host_ok = host.as_deref().is_some_and(|h| policy::host_allowed(h, port));
     let kind = policy::kind(origin.as_deref(), site.as_deref(), port);
     let approved = state.approved_origins.lock().unwrap_or_else(|p| p.into_inner()).clone();
+    row.caller = match &kind {
+        policy::Kind::Local => "local".into(),
+        policy::Kind::SameOrigin => "same-origin".into(),
+        policy::Kind::Extension(_) => "extension".into(),
+        policy::Kind::Website => "website".into(),
+    };
 
     // CORS preflight: answered only for a caller that could then be served.
     if method == Method::Options {
@@ -382,19 +466,28 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
                 policy::Kind::SameOrigin => true,
                 _ => tier == policy::Tier::Discovery,
             };
-        return preflight(req, ok, origin.as_deref(), tier == policy::Tier::Discovery);
+        row.tier = format!("{tier:?}");
+        row.status = preflight(req, ok, origin.as_deref(), tier == policy::Tier::Discovery);
+        row.why = if ok { "preflight allowed" } else { "preflight refused" }.into();
+        return state.record(row);
     }
 
     if matches!(method, Method::Post | Method::Put) {
         let mut body = String::new();
         let n = req.as_reader().take(MAX_BODY + 1).read_to_string(&mut body);
         if n.is_err() || body.len() as u64 > MAX_BODY {
-            return send(req, Reply::Status(413, "Request too large."), None);
+            row.status = send(req, Reply::Status(413, "Request too large."), None);
+            row.why = "body too large".into();
+            return state.record(row);
         }
         if !body.trim().is_empty() {
             match serde_json::from_str::<Value>(&body) {
                 Ok(Value::Object(m)) => args.extend(m),
-                _ => return send(req, Reply::BadRequest, None),
+                _ => {
+                    row.status = send(req, Reply::BadRequest, None);
+                    row.why = "body is not a JSON object".into();
+                    return state.record(row);
+                }
             }
         }
     }
@@ -406,7 +499,9 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
         _ => parse_query(query).get("token").and_then(Value::as_str).map(String::from),
     };
     if !state.allows(host_ok, token.as_deref()) {
-        return send(req, Reply::Unauthorized, None);
+        row.status = send(req, Reply::Unauthorized, None);
+        row.why = "host not allowed and no valid token".into();
+        return state.record(row);
     }
     let token_ok = state.token_valid(token.as_deref());
 
@@ -422,6 +517,7 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
     {
         verdict = policy::Verdict::Forbidden("Only a library from the recent libraries list can be opened from a browser extension.");
     }
+    row.tier = format!("{tier:?}");
     let cors = policy::cors_origin(tier, &kind, &verdict, origin.as_deref());
     if let policy::Verdict::Forbidden(why) = verdict {
         if let policy::Kind::Extension(o) = &kind
@@ -429,7 +525,9 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
         {
             *state.blocked_origin.lock().unwrap_or_else(|p| p.into_inner()) = Some(o.clone());
         }
-        return send(req, Reply::Status(403, why), cors);
+        row.status = send(req, Reply::Status(403, why), cors);
+        row.why = why.to_string();
+        return state.record(row);
     }
 
     let reply = match path.as_str() {
@@ -438,13 +536,15 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
         "/api/v2/playground" => Reply::Page(PLAYGROUND),
         _ => route(lib, state, &method, &path, &args),
     };
-    send(req, reply, cors);
+    row.status = send(req, reply, cors);
+    row.why = "served".into();
+    state.record(row);
 }
 
-fn preflight(req: Request, ok: bool, origin: Option<&str>, discovery: bool) {
+fn preflight(req: Request, ok: bool, origin: Option<&str>, discovery: bool) -> u16 {
     if !ok {
         let _ = req.respond(Response::empty(403));
-        return;
+        return 403;
     }
     let allow = if discovery { "*".to_string() } else { origin.unwrap_or("").to_string() };
     let h = |k: &str, v: &str| Header::from_bytes(k, v).unwrap();
@@ -457,6 +557,7 @@ fn preflight(req: Request, ok: bool, origin: Option<&str>, discovery: bool) {
             .with_header(h("Access-Control-Max-Age", "600"))
             .with_header(h("Vary", "Origin")),
     );
+    204
 }
 
 /// The discovery answer. A caller that is not otherwise authorized (a web
@@ -553,7 +654,7 @@ fn decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-fn send(req: Request, reply: Reply, cors: Option<String>) {
+fn send(req: Request, reply: Reply, cors: Option<String>) -> u16 {
     let (code, body) = match reply {
         Reply::Redirect(to) => {
             let resp = match Header::from_bytes("Location", to.as_bytes()) {
@@ -561,19 +662,19 @@ fn send(req: Request, reply: Reply, cors: Option<String>) {
                 Err(()) => Response::empty(404),
             };
             let _ = req.respond(resp);
-            return;
+            return 302;
         }
         Reply::Missing(m) => {
             let resp = Response::from_string(json!({"error": m}).to_string())
                 .with_status_code(404)
                 .with_header(Header::from_bytes("Content-Type", "application/json").unwrap());
             let _ = req.respond(resp);
-            return;
+            return 404;
         }
         Reply::Page(html) => {
             let resp = Response::from_string(html).with_header(Header::from_bytes("Content-Type", "text/html; charset=utf-8").unwrap());
             let _ = req.respond(resp);
-            return;
+            return 200;
         }
         Reply::Data(d) => (200, json!({"status": "success", "data": d})),
         Reply::Empty => (200, json!({"status": "success"})),
@@ -597,6 +698,7 @@ fn send(req: Request, reply: Reply, cors: Option<String>) {
         resp = resp.with_header(h).with_header(Header::from_bytes("Vary", "Origin").unwrap());
     }
     let _ = req.respond(resp);
+    code
 }
 
 // ---------------------------------------------------------------------------
