@@ -443,10 +443,17 @@ impl App {
         let ts = if let Some(ref t) = tex {
             let tsize = t.size_vec2();
             if item.width > 0 && item.height > 0 {
-                if (tsize.x > tsize.y && item.width < item.height) || (tsize.y > tsize.x && item.width > item.height) {
+                let tex_ratio = tsize.x / tsize.y;
+                let item_ratio = item.width as f32 / item.height as f32;
+                let swap_ratio = item.height as f32 / item.width as f32;
+                if (swap_ratio / tex_ratio - 1.0).abs() < 0.20
+                    && ((tsize.x > tsize.y && item.width < item.height) || (tsize.y > tsize.x && item.width > item.height))
+                {
                     vec2(item.height as f32, item.width as f32)
-                } else {
+                } else if (item_ratio / tex_ratio - 1.0).abs() < 0.20 {
                     vec2(item.width as f32, item.height as f32)
+                } else {
+                    tsize
                 }
             } else {
                 tsize

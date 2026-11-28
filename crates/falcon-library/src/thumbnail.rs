@@ -306,19 +306,36 @@ pub struct Spotlight {
 /// hasn't indexed, such as ones in temporary folders, give nothing.
 pub fn spotlight(path: &Path) -> Spotlight {
     let out = std::process::Command::new("mdls")
-        .args(["-raw", "-name", "kMDItemPixelWidth", "-name", "kMDItemPixelHeight", "-name", "kMDItemDurationSeconds"])
+        .args(["-name", "kMDItemPixelWidth", "-name", "kMDItemPixelHeight", "-name", "kMDItemDurationSeconds"])
         .arg(path)
         .output();
     let Ok(out) = out else { return Spotlight::default() };
-    let text = String::from_utf8_lossy(&out.stdout);
-    let vals: Vec<Option<f64>> = text.split('\0').map(|v| v.trim().parse().ok()).collect();
-    let get = |i: usize| vals.get(i).copied().flatten();
+    parse_spotlight_output(&String::from_utf8_lossy(&out.stdout))
+}
+
+pub(crate) fn parse_spotlight_output(text: &str) -> Spotlight {
+    let mut width: Option<u32> = None;
+    let mut height: Option<u32> = None;
+    let mut duration: Option<f64> = None;
+    for line in text.lines() {
+        let Some((key, val)) = line.split_once('=') else { continue };
+        let (key, val) = (key.trim(), val.trim());
+        if val == "(null)" {
+            continue;
+        }
+        match key {
+            "kMDItemPixelWidth" => width = val.parse::<f64>().ok().map(|w| w as u32),
+            "kMDItemPixelHeight" => height = val.parse::<f64>().ok().map(|h| h as u32),
+            "kMDItemDurationSeconds" => duration = val.parse::<f64>().ok(),
+            _ => {}
+        }
+    }
     Spotlight {
-        size: match (get(0), get(1)) {
-            (Some(w), Some(h)) if w > 0.0 && h > 0.0 => Some((w as u32, h as u32)),
+        size: match (width, height) {
+            (Some(w), Some(h)) if w > 0 && h > 0 => Some((w, h)),
             _ => None,
         },
-        duration: get(2),
+        duration,
     }
 }
 
@@ -908,5 +925,18 @@ mod tests {
         let wide_svg = tmp.path().join("wide.svg");
         fs::write(&wide_svg, br##"<svg xmlns="http://www.w3.org/2000/svg" width="10000" height="1"><rect width="10000" height="1" fill="#f00"/></svg>"##).unwrap();
         assert!(render_svg_bounded(&wide_svg, 320, 1 << 20, 4096).is_err());
+    }
+
+    #[test]
+    fn parse_spotlight_output_orders_keys_correctly() {
+        let mdls_output = "kMDItemDurationSeconds = 173.7916666666667\nkMDItemPixelHeight     = 1350\nkMDItemPixelWidth      = 1080\n";
+        let parsed = parse_spotlight_output(mdls_output);
+        assert_eq!(parsed.size, Some((1080, 1350)));
+        assert_eq!(parsed.duration, Some(173.7916666666667));
+
+        let null_output = "kMDItemDurationSeconds = (null)\nkMDItemPixelHeight     = (null)\nkMDItemPixelWidth      = (null)\n";
+        let parsed_null = parse_spotlight_output(null_output);
+        assert_eq!(parsed_null.size, None);
+        assert_eq!(parsed_null.duration, None);
     }
 }

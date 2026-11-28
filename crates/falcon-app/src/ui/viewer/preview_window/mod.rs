@@ -694,10 +694,17 @@ impl PreviewWin {
         } else if item.width > 0 && item.height > 0 {
             if let Some(ref t) = tex {
                 let ts = t.size_vec2();
-                if (ts.x > ts.y && item.width < item.height) || (ts.y > ts.x && item.width > item.height) {
+                let tex_ratio = ts.x / ts.y;
+                let item_ratio = item.width as f32 / item.height as f32;
+                let swap_ratio = item.height as f32 / item.width as f32;
+                if (swap_ratio / tex_ratio - 1.0).abs() < 0.20
+                    && ((ts.x > ts.y && item.width < item.height) || (ts.y > ts.x && item.width > item.height))
+                {
                     tf.size(item.height as f32, item.width as f32)
-                } else {
+                } else if (item_ratio / tex_ratio - 1.0).abs() < 0.20 {
                     tf.size(item.width as f32, item.height as f32)
+                } else {
+                    tf.size(ts.x, ts.y)
                 }
             } else {
                 tf.size(item.width as f32, item.height as f32)

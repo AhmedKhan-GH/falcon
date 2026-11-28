@@ -124,10 +124,18 @@ impl App {
                     let ts = tex.size_vec2();
                     if ts.x > 0.0 && ts.y > 0.0 {
                         if i.width > 0 && i.height > 0 {
-                            if (ts.x > ts.y && i.width < i.height) || (ts.y > ts.x && i.width > i.height) {
-                                return i.height as f32 / i.width as f32;
+                            let tex_ratio = ts.x / ts.y;
+                            let item_ratio = i.width as f32 / i.height as f32;
+                            let swap_ratio = i.height as f32 / i.width as f32;
+                            if (swap_ratio / tex_ratio - 1.0).abs() < 0.20
+                                && ((ts.x > ts.y && i.width < i.height) || (ts.y > ts.x && i.width > i.height))
+                            {
+                                return swap_ratio;
                             }
-                            return i.width as f32 / i.height as f32;
+                            if (item_ratio / tex_ratio - 1.0).abs() < 0.20 {
+                                return item_ratio;
+                            }
+                            return tex_ratio;
                         }
                         return ts.x / ts.y;
                     }
@@ -405,10 +413,17 @@ impl App {
             Some(tex) => {
                 let natural = if item.width > 0 && item.height > 0 {
                     let tsize = tex.size_vec2();
-                    if (tsize.x > tsize.y && item.width < item.height) || (tsize.y > tsize.x && item.width > item.height) {
+                    let tex_ratio = tsize.x / tsize.y;
+                    let item_ratio = item.width as f32 / item.height as f32;
+                    let swap_ratio = item.height as f32 / item.width as f32;
+                    if (swap_ratio / tex_ratio - 1.0).abs() < 0.20
+                        && ((tsize.x > tsize.y && item.width < item.height) || (tsize.y > tsize.x && item.width > item.height))
+                    {
                         vec2(item.height as f32, item.width as f32)
-                    } else {
+                    } else if (item_ratio / tex_ratio - 1.0).abs() < 0.20 {
                         vec2(item.width as f32, item.height as f32)
+                    } else {
+                        tsize
                     }
                 } else {
                     tex.size_vec2()
@@ -636,14 +651,21 @@ impl App {
         };
         let grid = self.ws.loader.get(&item.id, Tier::Grid).cloned();
         let natural = match (item.width, item.height, &grid) {
-            (w, h, Some(t))
-                if (t.size_vec2().x > t.size_vec2().y && w < h)
-                    || (t.size_vec2().y > t.size_vec2().x && w > h) =>
-            {
-                vec2(h as f32, w as f32)
+            (w, h, Some(t)) if w > 0 && h > 0 => {
+                let ts = t.size_vec2();
+                let tex_ratio = ts.x / ts.y;
+                let item_ratio = w as f32 / h as f32;
+                let swap_ratio = h as f32 / w as f32;
+                if (swap_ratio / tex_ratio - 1.0).abs() < 0.20 && ((ts.x > ts.y && w < h) || (ts.y > ts.x && w > h)) {
+                    vec2(h as f32, w as f32)
+                } else if (item_ratio / tex_ratio - 1.0).abs() < 0.20 {
+                    vec2(w as f32, h as f32)
+                } else {
+                    ts
+                }
             }
-            (w, h, _) if w > 0 && h > 0 => vec2(w as f32, h as f32),
             (_, _, Some(t)) => t.size_vec2(),
+            (w, h, _) if w > 0 && h > 0 => vec2(w as f32, h as f32),
             _ => return,
         };
         let window = ctx.content_rect();
