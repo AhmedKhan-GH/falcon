@@ -691,100 +691,30 @@ impl App {
             }
         }
     }
+}
 
-    /// Deduces the external physical directory for a Falcon folder from its linked items.
-    pub(crate) fn deduce_source_path_for_folder(&self, folder_id: &str) -> Option<PathBuf> {
-        let shared = self.ws.lib.as_ref()?.clone();
-        let guard = lock(&shared);
-        let lib: &Library = &guard;
-        let mut path_counts: HashMap<PathBuf, usize> = HashMap::new();
-        for item in lib.items() {
-            if !item.is_deleted
-                && item.folders.iter().any(|f| f == folder_id)
-                && let Some(src) = lib.resolved_source_path(&item.id).ok().or_else(|| lib.last_known_source_path(&item.id))
-                && let Some(parent) = src.parent()
-                && parent.is_dir()
-            {
-                *path_counts.entry(parent.to_path_buf()).or_default() += 1;
+/// Deduces the external physical directory for a Falcon folder from its linked items directly from `&Library`.
+/// Operates on the already-provided reference without re-acquiring mutexes (preventing UI deadlocks),
+/// and samples up to 10 items for fast responsiveness.
+pub(crate) fn deduce_source_path_from_lib(lib: &Library, folder_id: &str) -> Option<PathBuf> {
+    let mut path_counts: HashMap<PathBuf, usize> = HashMap::new();
+    let mut checked = 0;
+    for item in lib.items() {
+        if !item.is_deleted && item.folders.iter().any(|f| f == folder_id) {
+            if let Some(src) = lib.last_known_source_path(&item.id).or_else(|| lib.resolved_source_path(&item.id).ok()) {
+                if let Some(parent) = src.parent() {
+                    if parent.is_dir() {
+                        *path_counts.entry(parent.to_path_buf()).or_default() += 1;
+                        checked += 1;
+                        if checked >= 10 {
+                            break;
+                        }
+                    }
+                }
             }
         }
-        path_counts.into_iter().max_by_key(|(_, c)| *c).map(|(p, _)| p)
     }
-
-    /// Returns an existing `WatchedFolder` for `folder_id` or creates a targeted one
-    /// (with `recursive: false` and `sync_mode: SyncMode::Manual`).
-    /// If no path can be automatically deduced, prompts the user with a folder picker.
-    pub(crate) fn ensure_watched_folder_for(&mut self, folder_id: &str) -> Option<falcon_library::WatchedFolder> {
-        let shared = self.ws.lib.as_ref()?.clone();
-        {
-            let guard = lock(&shared);
-            if let Some(wf) = guard.config().find_watched_by_folder_id(folder_id)
-                && wf.source_path.is_dir()
-            {
-                return Some(wf);
-            }
-        }
-
-        // Try deducing from existing linked items in this folder
-        let source_path = if let Some(deduced) = self.deduce_source_path_for_folder(folder_id) {
-            deduced
-        } else {
-            // Prompt the user to pick the folder
-            crate::dialog_owner::file_dialog()
-                .set_title(tr("Choose Source Folder to Sync"))
-                .pick_folder()?
-        };
-
-        let mut guard = lock(&shared);
-        let lib: &mut Library = &mut guard;
-        let id = falcon_library::ids::new_id();
-        let wf = falcon_library::WatchedFolder {
-            id: id.clone(),
-            source_path,
-            folder_id: folder_id.to_string(),
-            storage_mode: lib.storage_mode(),
-            sync_mode: falcon_library::SyncMode::Manual,
-            recursive: false,
-            last_synced: None,
-            status: falcon_library::SyncStatus::Idle,
-            last_error: None,
-        };
-        if lib.upsert_watched_folder(wf.clone()).is_ok() {
-            Some(wf)
-        } else {
-            None
-        }
-    }
-
-    /// Performs an immediate, targeted 1-click sync of this folder only.
-    pub(crate) fn sync_targeted_folder(&mut self, folder_id: &str) {
-        if let Some(wf) = self.ensure_watched_folder_for(folder_id) {
-            self.sync_folder_now(&wf.id);
-        }
-    }
-
-    /// Toggles auto-sync for a targeted folder (Manual <-> Auto).
-    /// When disabled, it switches to Manual and immediately stops the background watcher (0% CPU).
-    pub(crate) fn toggle_folder_auto_sync(&mut self, folder_id: &str) {
-        let Some(shared) = self.ws.lib.clone() else { return };
-        let Some(wf) = self.ensure_watched_folder_for(folder_id) else { return };
-        let mut guard = lock(&shared);
-        let lib: &mut Library = &mut guard;
-        let mut updated = wf;
-        if updated.sync_mode == falcon_library::SyncMode::Auto {
-            updated.sync_mode = falcon_library::SyncMode::Manual;
-            let _ = lib.upsert_watched_folder(updated);
-            self.ws.sync_read = None;
-            self.flash(tr("Auto-Sync disabled (Manual only, 0% CPU)"));
-        } else {
-            updated.sync_mode = falcon_library::SyncMode::Auto;
-            let _ = lib.upsert_watched_folder(updated.clone());
-            self.ws.sync_read = None;
-            self.flash(tr("Auto-Sync enabled for this folder (Active Project)"));
-            drop(guard);
-            self.sync_folder_now(&updated.id);
-        }
-    }
+    path_counts.into_iter().max_by_key(|(_, c)| *c).map(|(p, _)| p)
 }
 
 /// The toast after a smart folder's Refresh.
@@ -808,5 +738,12 @@ mod tests {
     fn restore_note_names_the_library_and_backup() {
         let note = restored_note(Path::new("/s/Photos.library/backup/backup-2026-10-26 02.15.25.310.json"));
         assert_eq!(note, "Photos's metadata.json was damaged and was restored from backup/backup-2026-10-26 02.15.25.310.json; the damaged file was kept in backup/");
+    }
+
+    #[test]
+    fn deduce_source_path_empty_folder_returns_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lib = falcon_library::Library::create(tmp.path().join("L.library")).unwrap();
+        assert_eq!(super::deduce_source_path_from_lib(&lib, "nonexistent"), None);
     }
 }

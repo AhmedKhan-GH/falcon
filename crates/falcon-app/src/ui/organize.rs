@@ -542,7 +542,26 @@ impl App {
                 ui.close();
             }
         } else if ui.button(tr("Sync This Folder Now")).clicked() {
-            self.sync_targeted_folder(&f.id);
+            if let Some(wf) = &watched {
+                self.sync_folder_now(&wf.id);
+            } else if let Some(src) = crate::app::library::deduce_source_path_from_lib(lib, &f.id) {
+                let wf = falcon_library::WatchedFolder {
+                    id: falcon_library::ids::new_id(),
+                    source_path: src,
+                    folder_id: f.id.clone(),
+                    storage_mode: lib.storage_mode(),
+                    sync_mode: falcon_library::SyncMode::Manual,
+                    recursive: false,
+                    last_synced: None,
+                    status: falcon_library::SyncStatus::Idle,
+                    last_error: None,
+                };
+                self.ws.actions.push(Action::TargetedFolderSync { wf, run_now: true });
+            } else {
+                self.open_preferences();
+                self.prefs_window.set_pane(crate::prefs::Section::AutoImport);
+                self.flash(tr("Folder Sync Settings…"));
+            }
             ui.close();
         }
 
@@ -552,7 +571,26 @@ impl App {
             tr("Enable Auto-Sync (Active Project)")
         };
         if ui.button(auto_sync_label).clicked() {
-            self.toggle_folder_auto_sync(&f.id);
+            if let Some(wf) = &watched {
+                self.ws.actions.push(Action::ToggleFolderSync { wf_id: wf.id.clone(), auto: !is_auto });
+            } else if let Some(src) = crate::app::library::deduce_source_path_from_lib(lib, &f.id) {
+                let wf = falcon_library::WatchedFolder {
+                    id: falcon_library::ids::new_id(),
+                    source_path: src,
+                    folder_id: f.id.clone(),
+                    storage_mode: lib.storage_mode(),
+                    sync_mode: falcon_library::SyncMode::Auto,
+                    recursive: false,
+                    last_synced: None,
+                    status: falcon_library::SyncStatus::Idle,
+                    last_error: None,
+                };
+                self.ws.actions.push(Action::TargetedFolderSync { wf, run_now: true });
+            } else {
+                self.open_preferences();
+                self.prefs_window.set_pane(crate::prefs::Section::AutoImport);
+                self.flash(tr("Folder Sync Settings…"));
+            }
             ui.close();
         }
 

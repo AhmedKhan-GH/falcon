@@ -99,6 +99,10 @@ pub(crate) enum Action {
     ResolveDuplicates(Vec<crate::import_dupes::Pending>, crate::import_dupes::Choice),
     /// An action's steps run on items (`actions/`).
     RunSteps(crate::actions::Run),
+    /// Registers a targeted WatchedFolder and optionally triggers an immediate sync pass.
+    TargetedFolderSync { wf: falcon_library::WatchedFolder, run_now: bool },
+    /// Toggles auto-sync mode for an existing WatchedFolder.
+    ToggleFolderSync { wf_id: String, auto: bool },
 }
 
 /// Most undo steps kept.
@@ -161,6 +165,7 @@ pub(crate) fn action_label(action: &Action) -> String {
         Action::RenameItem(..) => tr("Rename").into(),
         Action::NewDocument(..) => tr("New document").into(),
         Action::RunSteps(run) => crate::actions::app::run_label(run),
+        Action::TargetedFolderSync { .. } | Action::ToggleFolderSync { .. } => tr("Folder Synchronization").into(),
     }
 }
 
@@ -513,6 +518,33 @@ impl App {
                     }
                     None => Ok(()),
                 },
+                Action::TargetedFolderSync { wf, run_now } => {
+                    let wf_id = wf.id.clone();
+                    let res = lib.upsert_watched_folder(wf).map_err(|e| falcon_library::Error::Refused(e.to_string()));
+                    self.ws.sync_read = None;
+                    if res.is_ok() && run_now {
+                        self.sync_folder_now(&wf_id);
+                    }
+                    res
+                }
+                Action::ToggleFolderSync { wf_id, auto } => {
+                    if let Some(mut wf) = lib.config().find_watched_folder(&wf_id) {
+                        wf.sync_mode = if auto { falcon_library::SyncMode::Auto } else { falcon_library::SyncMode::Manual };
+                        let res = lib.upsert_watched_folder(wf).map_err(|e| falcon_library::Error::Refused(e.to_string()));
+                        self.ws.sync_read = None;
+                        if res.is_ok() {
+                            if auto {
+                                self.flash(tr("Auto-Sync enabled for this folder (Active Project)"));
+                                self.sync_folder_now(&wf_id);
+                            } else {
+                                self.flash(tr("Auto-Sync disabled (Manual only, 0% CPU)"));
+                            }
+                        }
+                        res
+                    } else {
+                        Ok(())
+                    }
+                }
             };
             match result {
                 Ok(()) => {
