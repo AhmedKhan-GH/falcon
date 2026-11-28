@@ -479,6 +479,25 @@ fn opaque_browser_reads_need_a_session_and_are_limited() {
 }
 
 #[test]
+fn session_calls_never_lock_the_library() {
+    // The app holds the library's lock for a whole frame and calls these from inside it.
+    // Locking again from the same thread would never return (this froze the app).
+    let e = env();
+    let guard = e.lib.lock().unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::scope(|s| {
+        s.spawn(|| {
+            e.server.start_session(600);
+            let left = e.server.session_remaining();
+            e.server.stop_session();
+            let _ = tx.send(left.is_some());
+        });
+        assert_eq!(rx.recv_timeout(std::time::Duration::from_secs(5)), Ok(true), "start_session/session_remaining must not wait for the library lock");
+    });
+    drop(guard);
+}
+
+#[test]
 fn sessions_expire_and_end_with_the_library() {
     let e = env();
     e.server.start_session(1);

@@ -78,6 +78,10 @@ struct State {
     next_pending: std::sync::atomic::AtomicU64,
     /// Wakes the app when something needs its attention.
     notify: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+    /// The served library's root, kept here so the app can ask without locking the
+    /// library: the app holds that lock for a whole frame, and a second lock from
+    /// the same thread never returns.
+    root: Mutex<String>,
     /// Times of recent requests from browsers, for the rate limit.
     browser_hits: Mutex<std::collections::VecDeque<std::time::Instant>>,
 }
@@ -171,6 +175,7 @@ impl State {
             pending: Mutex::new(Vec::new()),
             next_pending: std::sync::atomic::AtomicU64::new(1),
             notify: Mutex::new(None),
+            root: Mutex::new(root_of(lib)),
             browser_hits: Mutex::new(std::collections::VecDeque::new()),
         }
     }
@@ -284,7 +289,9 @@ impl Handle {
     /// library is left as it is (its owner still holds it), and the new
     /// one joins `library/history`.
     pub fn set_library(&self, lib: Shared) {
-        self.state.remember(root_of(&lib));
+        let root = root_of(&lib);
+        *self.state.root.lock().unwrap_or_else(|p| p.into_inner()) = root.clone();
+        self.state.remember(root);
         *self.slot.lock().unwrap_or_else(|p| p.into_inner()) = lib;
     }
 
@@ -334,7 +341,7 @@ impl Handle {
     /// `secs` seconds. It ends by itself, when stopped, when another library
     /// is served, and with the process.
     pub fn start_session(&self, secs: u64) {
-        let root = root_of(&self.library());
+        let root = self.state.root.lock().unwrap_or_else(|p| p.into_inner()).clone();
         *self.state.session.lock().unwrap_or_else(|p| p.into_inner()) =
             Some(Session { expires: std::time::Instant::now() + std::time::Duration::from_secs(secs), root, origins: HashSet::new() });
     }
@@ -345,7 +352,7 @@ impl Handle {
 
     /// Seconds left in the session, or None when there is none.
     pub fn session_remaining(&self) -> Option<u64> {
-        let root = root_of(&self.library());
+        let root = self.state.root.lock().unwrap_or_else(|p| p.into_inner()).clone();
         self.state.session_snapshot(&root).0.then(|| {
             let s = self.state.session.lock().unwrap_or_else(|p| p.into_inner());
             s.as_ref().map_or(0, |x| x.expires.saturating_duration_since(std::time::Instant::now()).as_secs())
@@ -1511,6 +1518,7 @@ fn unlocked_route(lib: &Shared, state: &State, path: &str, args: &Map<String, Va
             match v2::open_library(s(args, "libraryPath").unwrap_or("")) {
                 Ok(new) => {
                     state.remember(new.root().display().to_string());
+                    *state.root.lock().unwrap_or_else(|p| p.into_inner()) = new.root().display().to_string();
                     *lock(lib) = new;
                     *state.session.lock().unwrap_or_else(|p| p.into_inner()) = None;
                     if v2 { Reply::Data(json!(true)) } else { Reply::Empty }
