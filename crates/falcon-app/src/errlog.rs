@@ -13,15 +13,16 @@ const LIMIT: u64 = 1024 * 1024;
 
 /// The folder holding the log.
 fn dir() -> Option<PathBuf> {
+    let name = crate::app_data_name();
     if cfg!(target_os = "macos") {
-        return Some(falcon_library::paths::home_dir()?.join("Library/Logs/Falcon"));
+        return Some(falcon_library::paths::home_dir()?.join("Library/Logs").join(name));
     }
     #[cfg(windows)]
-    return Some(falcon_library::paths::local_data_dir()?.join("Falcon").join("Logs"));
+    return Some(falcon_library::paths::local_data_dir()?.join(name).join("Logs"));
     #[cfg(not(windows))]
     let state = std::env::var_os("XDG_STATE_HOME").map(PathBuf::from).or_else(|| Some(PathBuf::from(std::env::var_os("HOME")?).join(".local/state")))?;
     #[cfg(not(windows))]
-    Some(state.join("falcon"))
+    Some(state.join(if name == "Falcon" { "falcon" } else { name }))
 }
 
 /// The log file.

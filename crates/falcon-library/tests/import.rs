@@ -72,7 +72,7 @@ fn imports_large_png() {
     assert!(item.palettes.is_empty());
 
     // Original keeps the source mtime; thumbnail is WebP with a 320 short side.
-    let raw = item.original_path(lib.root());
+    let raw = item.managed_storage_path(lib.root());
     assert_eq!(filetime::FileTime::from_last_modification_time(&fs::metadata(&raw).unwrap()), past);
     let thumb = item.thumbnail_path(lib.root()).expect("thumbnail written");
     assert!(thumb.to_str().unwrap().ends_with("bigpic_thumbnail.png"));
@@ -103,7 +103,7 @@ fn small_png_has_no_thumbnail() {
     assert_eq!(item.no_thumbnail, Some(true));
     assert_eq!(item.remove_thumbnail, None);
     assert!(item.thumbnail_path(lib.root()).is_none());
-    assert!(item.original_path(lib.root()).is_file());
+    assert!(item.managed_storage_path(lib.root()).is_file());
 }
 
 #[test]
@@ -213,7 +213,7 @@ fn editing_renames_files_and_trashes() {
     assert_eq!(got.name, "Renamed item");
     assert!(got.tags.contains(&"edited".to_string()));
     assert!(got.last_modified > before);
-    assert!(got.original_path(reopened.root()).is_file());
+    assert!(got.managed_storage_path(reopened.root()).is_file());
     assert!(got.thumbnail_path(reopened.root()).is_some());
 
     lib.set_trashed(std::slice::from_ref(&item.id), true).unwrap();
@@ -280,7 +280,7 @@ fn quicklook_formats_get_thumbnails() {
     let mut lib = Library::open(&dest).unwrap();
     let eagle = lib.items().iter().find(|i| i.ext == "pdf").unwrap().clone();
     let pdf = tmp.path().join("seal.pdf");
-    std::fs::copy(eagle.original_path(lib.root()), &pdf).unwrap();
+    std::fs::copy(eagle.managed_storage_path(lib.root()), &pdf).unwrap();
 
     let id = lib.import_file(&pdf, &ImportOptions::default()).unwrap();
     let item = lib.item(&id).unwrap();
@@ -464,14 +464,14 @@ fn merging_duplicates_keeps_one_combines_the_rest_and_undoes() {
     let kept = reopened.item(&ids[0]).unwrap();
     assert!(!kept.is_deleted);
     assert_eq!(kept.name, "copy");
-    assert!(kept.original_path(&root).is_file(), "the original was renamed with the item");
+    assert!(kept.managed_storage_path(&root).is_file(), "the original was renamed with the item");
     assert_eq!(kept.folders, [f1.clone(), f2.clone()]);
     assert_eq!(kept.tags, ["t0", "t1", "t2"]);
     assert_eq!(kept.url, "https://example.com/copy");
     assert_eq!(kept.annotation, "note 0\nnote 1\nnote 2");
     assert_eq!(kept.extra.get("star").and_then(|v| v.as_u64()), Some(3));
     assert!(reopened.item(&ids[1]).unwrap().is_deleted && reopened.item(&ids[2]).unwrap().is_deleted);
-    assert!(reopened.item(&ids[1]).unwrap().original_path(&root).is_file(), "trashed copies keep their files");
+    assert!(reopened.item(&ids[1]).unwrap().managed_storage_path(&root).is_file(), "trashed copies keep their files");
 
     lib.revert(tx).unwrap();
     let back = Library::open(&root).unwrap();
@@ -479,7 +479,7 @@ fn merging_duplicates_keeps_one_combines_the_rest_and_undoes() {
         let now = back.item(&b.id).unwrap();
         assert_eq!((&now.name, &now.folders, &now.tags, &now.annotation, &now.url, now.is_deleted), (&b.name, &b.folders, &b.tags, &b.annotation, &b.url, false));
         assert_eq!(now.extra.get("star"), b.extra.get("star"));
-        assert!(now.original_path(&root).is_file());
+        assert!(now.managed_storage_path(&root).is_file());
     }
 }
 

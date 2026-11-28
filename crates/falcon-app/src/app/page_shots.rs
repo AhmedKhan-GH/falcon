@@ -91,11 +91,12 @@ impl PageShots {
 
 /// The address a page screenshot of `item` would load: a `.url` bookmark
 /// with an http or https address and no custom thumbnail.
-fn page_address(root: &std::path::Path, item: &Item) -> Option<String> {
+fn page_address(lib: &Library, item: &Item) -> Option<String> {
     if has_custom_thumbnail(item) {
         return None;
     }
-    match webview::page_for(&item.ext, &item.url, &item.original_path(root)) {
+    let path = lib.resolved_source_path(&item.id).unwrap_or_else(|_| item.managed_storage_path(lib.root()));
+    match webview::page_for(&item.ext, &item.url, &path) {
         Some(Page::Remote(url)) => Some(url),
         _ => None,
     }
@@ -111,8 +112,7 @@ fn save(target: &Target, url: &str, tiff: &[u8]) -> Saved {
         Err(e) => return Saved::Failed(e.to_string()),
     };
     let mut lib = shared.lock().unwrap_or_else(|p| p.into_inner());
-    let root = lib.root().to_path_buf();
-    if lib.item(&target.id).and_then(|item| page_address(&root, item)).as_deref() != Some(url) {
+    if lib.item(&target.id).and_then(|item| page_address(&lib, item)).as_deref() != Some(url) {
         return Saved::Skipped;
     }
     match lib.set_page_thumbnail(&target.id, &page, PAGE_SIZE.0, PAGE_SIZE.1) {
@@ -139,7 +139,7 @@ impl App {
         let Some(shared) = &self.ws.lib else { return };
         let weak = Arc::downgrade(shared);
         for id in added {
-            let Some(url) = lib.item(id).and_then(|item| page_address(lib.root(), item)) else { continue };
+            let Some(url) = lib.item(id).and_then(|item| page_address(lib, item)) else { continue };
             if self.link_import.bookmarks.remove(&url) {
                 self.page_shots.enqueue(&self.ctx, Target { lib: weak.clone(), id: id.clone(), asked: false }, &url);
             }
@@ -155,7 +155,7 @@ impl App {
         let mut rest = Vec::new();
         let mut queued = 0;
         for id in ids {
-            match lib.item(&id).and_then(|item| page_address(lib.root(), item)) {
+            match lib.item(&id).and_then(|item| page_address(lib, item)) {
                 Some(url) => queued += usize::from(self.page_shots.enqueue(&self.ctx, Target { lib: weak.clone(), id, asked: true }, &url)),
                 None => rest.push(id),
             }
@@ -247,18 +247,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut lib = Library::create(dir.path().join("T.library")).unwrap();
         let web = bookmark(&mut lib, dir.path(), "https://example.com/");
-        let root = lib.root().to_path_buf();
-        assert_eq!(page_address(&root, lib.item(&web).unwrap()).as_deref(), Some("https://example.com/"));
+        assert_eq!(page_address(&lib, lib.item(&web).unwrap()).as_deref(), Some("https://example.com/"));
 
         let mut other = lib.item(&web).unwrap().clone();
         other.url = "file:///etc/hosts".into();
-        assert_eq!(page_address(&root, &other), None, "not a web address");
+        assert_eq!(page_address(&lib, &other), None, "not a web address");
         let mut custom = lib.item(&web).unwrap().clone();
         custom.extra.insert(falcon_library::thumbnail::CUSTOM_THUMBNAIL_KEY.into(), true.into());
-        assert_eq!(page_address(&root, &custom), None, "the user's own thumbnail stays");
+        assert_eq!(page_address(&lib, &custom), None, "the user's own thumbnail stays");
         let mut html = lib.item(&web).unwrap().clone();
         html.ext = "html".into();
-        assert_eq!(page_address(&root, &html), None, "not a bookmark");
+        assert_eq!(page_address(&lib, &html), None, "not a bookmark");
     }
 
     #[test]

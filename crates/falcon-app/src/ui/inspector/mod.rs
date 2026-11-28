@@ -166,12 +166,25 @@ impl App {
         }
         divider(ui);
         let items: Vec<&Item> = self.ws.order.iter().filter_map(|id| lib.item(id)).collect();
-        let size: u64 = items.iter().map(|i| i.size).sum();
+        let size: u64 = if self.ws.scope == Scope::Home {
+            lib.items().iter().map(|i| i.size).sum()
+        } else {
+            items.iter().map(|i| i.size).sum()
+        };
         if self.fold_heading(ui, Fold::Properties, tr("Properties")) {
             // A locked folder keeps its count and size to itself.
             let shut = folder.as_ref().is_some_and(|f| crate::organize::is_shut(f, &self.ws.org.unlocked));
             if !shut {
-                prop(ui, tr("Items"), &items.len().to_string());
+                let total = match &self.ws.scope {
+                    Scope::Home => lib.items().len(),
+                    Scope::Folder(id) => self.folder_counts_for(lib).get(id).copied().unwrap_or(items.len()),
+                    _ => items.len(),
+                };
+                if total > items.len() {
+                    prop(ui, tr("Items"), &trf("{visible} ({hidden} hidden)", &[("visible", &items.len().to_string()), ("hidden", &(total - items.len()).to_string())]));
+                } else {
+                    prop(ui, tr("Items"), &items.len().to_string());
+                }
                 prop(ui, tr("Size"), &logic::format_size(size));
             }
             if let Some(f) = &folder {
@@ -228,7 +241,7 @@ impl App {
                 let ir = Rect::from_center_size(r.center(), ts * sc);
                 egui::Image::new((tex.id(), ir.size())).corner_radius(4).paint_at(ui, ir);
             }
-            if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
+            if let Some(j) = job_for(lib, item, Tier::Grid) {
                 self.ws.frame_jobs.push(j);
             }
         }
@@ -425,11 +438,28 @@ impl App {
         let w = ui.available_width();
 
         // Preview.
-        let aspect = if item.width > 0 && item.height > 0 { item.height as f32 / item.width as f32 } else { 1.0 };
+        let tex = self.ws.loader.get(&item.id, Tier::Preview).cloned();
+        let tex = tex.or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned());
+        let ts = if let Some(ref t) = tex {
+            let tsize = t.size_vec2();
+            if item.width > 0 && item.height > 0 {
+                if (tsize.x > tsize.y && item.width < item.height) || (tsize.y > tsize.x && item.width > item.height) {
+                    vec2(item.height as f32, item.width as f32)
+                } else {
+                    vec2(item.width as f32, item.height as f32)
+                }
+            } else {
+                tsize
+            }
+        } else if item.width > 0 && item.height > 0 {
+            vec2(item.width as f32, item.height as f32)
+        } else {
+            vec2(1.0, 1.0)
+        };
+        let aspect = if ts.x > 0.0 { ts.y / ts.x } else { 1.0 };
         let ph = (w * aspect).clamp(80.0, 260.0);
         let (prect, presp) = ui.allocate_exact_size(vec2(w, ph), Sense::click());
-        if let Some(tex) = self.ws.loader.get(&item.id, Tier::Preview) {
-            let ts = if item.width > 0 { vec2(item.width as f32, item.height as f32) } else { tex.size_vec2() };
+        if let Some(ref tex) = tex {
             let scale = (prect.width() / ts.x).min(prect.height() / ts.y).min(1.0);
             let r = Rect::from_center_size(prect.center(), ts * scale);
             egui::Image::new((tex.id(), r.size())).corner_radius(4).paint_at(ui, r);
@@ -439,7 +469,7 @@ impl App {
         if presp.double_clicked() {
             self.ws.viewer = Some(item.id.clone());
         }
-        if let Some(j) = job_for(&item, lib.root(), Tier::Preview) {
+        if let Some(j) = job_for(lib, &item, Tier::Preview) {
             self.ws.frame_jobs.push(j);
         }
 
@@ -612,32 +642,100 @@ impl App {
                 changed = Some(it);
             }
             if item.width > 0 {
-                prop(ui, tr("Dimensions"), &format!("{} × {}", item.width, item.height));
+                let tex = self.ws.loader.get(&item.id, Tier::Preview).cloned();
+                let tex = tex.or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned());
+                let (dw, dh) = if let Some(tex) = tex {
+                    let ts = tex.size_vec2();
+                    if (ts.y > ts.x && item.width > item.height) || (ts.x > ts.y && item.width < item.height) {
+                        (item.height, item.width)
+                    } else {
+                        (item.width, item.height)
+                    }
+                } else {
+                    (item.width, item.height)
+                };
+                prop(ui, tr("Dimensions"), &format!("{dw} × {dh}"));
             }
             if let Some(reason) = self.image.psd.fallback_reason(&item.id) {
                 prop(ui, tr("Render"), &reason);
             }
+            let availability = crate::linked_ui::classify_asset(lib, &item.id);
+            let link_record = if availability.is_linked() { lib.link_record(&item.id).ok().flatten() } else { None };
+            let source_display_path = link_record
+                .as_ref()
+                .map(|r| r.source_path.clone())
+                .or_else(|| availability.is_linked().then(|| lib.last_known_source_path(&item.id)).flatten());
+
             prop(ui, tr("Size"), &logic::format_size(item.size));
             let type_row = prop(ui, tr("Type"), &item.ext.to_uppercase());
-            let type_hit = ui.interact(type_row.rect, ui.scope_id().with("type-row"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(tr("Click to change the extension"));
-            if type_hit.clicked() {
-                self.ws.ext_dialog = Some(crate::ui::dialogs::ext::ExtDialog { id: item.id.clone(), current: item.ext.to_lowercase(), text: item.ext.clone(), uid: egui::Id::unique("change-extension"), focused: false });
+            if availability.is_linked() {
+                type_row.on_hover_text(tr("Not available for linked files (original files are read-only)"));
+            } else {
+                let type_hit = ui.interact(type_row.rect, ui.scope_id().with("type-row"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(tr("Click to change the extension"));
+                if type_hit.clicked() {
+                    self.ws.ext_dialog = Some(crate::ui::dialogs::ext::ExtDialog { id: item.id.clone(), current: item.ext.to_lowercase(), text: item.ext.clone(), uid: egui::Id::unique("change-extension"), focused: false });
+                }
+            }
+            prop(ui, tr("Storage"), if availability.is_linked() { tr("Link (Place)") } else { tr("Copy to Library") });
+            prop(ui, tr("Status"), availability.status_label());
+            if let Some(record) = &link_record
+                && let Some(volume) = crate::linked_ui::format_volume_summary(record)
+            {
+                prop(ui, tr("Volume"), &volume);
+            }
+            if let Some(src) = &source_display_path {
+                let src_text = src.display().to_string();
+                prop(ui, tr("Source"), &src_text).on_hover_text(&src_text);
             }
             prop(ui, tr("Date Imported"), &logic::format_ms(item.modification_time));
             prop(ui, tr("Date Created"), &logic::format_ms(item.btime));
             prop(ui, tr("Date Modified"), &logic::format_ms(item.mtime));
             crate::ui::viewer::audio::media_props(ui, &item);
             self.ifc_props(ui, lib, &item);
+            if let Some(notice) = availability.viewer_notice() {
+                ui.add_space(4.0);
+                ui.label(RichText::new(tr("Showing cached preview; original file is unavailable.")).size(11.5).color(t::p().icon_orange))
+                    .on_hover_text(notice);
+            }
         }
         ui.add_space(4.0);
-        if wide_button(ui, ic::ARROW_SQUARE_OUT, tr("Open in Default App"), true).clicked() {
-            let files = [item.original_path(lib.root())];
+        let availability = crate::linked_ui::classify_asset(lib, &item.id);
+        let resolved = lib.resolved_source_path(&item.id).ok();
+        let copy_path = resolved.clone().or_else(|| lib.last_known_source_path(&item.id));
+        let open_btn = wide_button(ui, ic::ARROW_SQUARE_OUT, tr("Open in Default App"), resolved.is_some());
+        if resolved.is_none() && availability.is_unavailable() {
+            open_btn.clone().on_hover_text(availability.badge_tooltip());
+        }
+        if open_btn.clicked()
+            && let Some(path) = &resolved
+        {
+            let files = [path.clone()];
             crate::open_with::open_default(&files);
             self.used(&files);
         }
         ui.add_space(4.0);
-        if wide_button(ui, ic::EXPORT, tr("Show in Finder"), true).clicked() {
-            crate::open_with::reveal(&[item.original_path(lib.root())]);
+        let reveal_label = if availability.is_linked() { tr("Reveal Original") } else { tr("Show in Finder") };
+        let reveal_btn = wide_button(ui, ic::EXPORT, reveal_label, resolved.is_some());
+        if resolved.is_none() && availability.is_unavailable() {
+            reveal_btn.clone().on_hover_text(availability.badge_tooltip());
+        }
+        if reveal_btn.clicked()
+            && let Some(path) = resolved
+        {
+            crate::open_with::reveal(&[path]);
+        }
+        if availability.is_linked() {
+            ui.add_space(4.0);
+            if wide_button(ui, ic::LINK, tr("Relink Original…"), true).clicked() {
+                self.open_relink_dialog(lib, vec![item.id.clone()]);
+            }
+            ui.add_space(4.0);
+            if wide_button(ui, ic::COPY, tr("Copy Source Path"), copy_path.is_some()).clicked()
+                && let Some(path) = copy_path
+            {
+                ui.ctx().copy_text(path.display().to_string());
+                self.flash(tr("Copied source path"));
+            }
         }
 
         if let Some(it) = changed {

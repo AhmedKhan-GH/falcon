@@ -525,6 +525,48 @@ impl App {
             self.ws.actions.push(org(OrgAction::FolderIcon(f.id.clone(), f.icon.clone(), color)));
             ui.close();
         }
+
+        // Folder Synchronization options
+        ui.separator();
+        let watched = lib.config().find_watched_by_folder_id(&f.id);
+        let is_active = watched.as_ref().is_some_and(|w| self.ws.sync.as_ref().is_some_and(|s| s.is_active(&w.id)));
+        let is_auto = watched.as_ref().is_some_and(|w| w.sync_mode == falcon_library::SyncMode::Auto);
+
+        if is_active {
+            if let Some(wf) = &watched
+                && ui.button(tr("Stop Synchronization")).clicked()
+            {
+                if let Some(s) = &self.ws.sync {
+                    s.cancel(&wf.id);
+                }
+                ui.close();
+            }
+        } else if ui.button(tr("Sync This Folder Now")).clicked() {
+            self.sync_targeted_folder(&f.id);
+            ui.close();
+        }
+
+        let auto_sync_label = if is_auto {
+            tr("✓ Auto-Sync Active (Click to Disable)")
+        } else {
+            tr("Enable Auto-Sync (Active Project)")
+        };
+        if ui.button(auto_sync_label).clicked() {
+            self.toggle_folder_auto_sync(&f.id);
+            ui.close();
+        }
+
+        if let Some(wf) = &watched {
+            if ui.button(tr("Show Source in Finder")).clicked() {
+                crate::open_with::open_default(std::slice::from_ref(&wf.source_path));
+                ui.close();
+            }
+            if ui.button(tr("Folder Sync Settings…")).clicked() {
+                self.open_preferences();
+                self.prefs_window.set_pane(crate::prefs::Section::AutoImport);
+                ui.close();
+            }
+        }
     }
 }
 
@@ -1221,7 +1263,11 @@ impl App {
             order.sort_by_key(|&i| pos.get(lib.items()[i].id.as_str()).copied().unwrap_or(usize::MAX));
         }
         let hidden = organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
-        organize::without_hidden(order, lib.items(), &hidden)
+        let mut order = organize::without_hidden(order, lib.items(), &hidden);
+        if self.display.hide_unsupported {
+            order.retain(|&i| falcon_library::format_capability::is_preview_supported(&lib.items()[i].ext));
+        }
+        order
     }
 
     /// The folder whose items can be dragged into a new order right now

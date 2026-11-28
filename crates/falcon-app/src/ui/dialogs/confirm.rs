@@ -28,46 +28,61 @@ impl App {
                         }
                         _ => tr_n(ids.len(), "Delete {n} folder?", "Delete {n} folders?"),
                     };
-                    (title, tr("Subfolders are deleted too."), tr("Delete"))
+                    (title, tr("Subfolders are deleted too.").to_string(), tr("Delete"))
                 }
                 Confirm::DeleteSmarts(ids) => (
                     tr_n(ids.len(), "Delete {n} smart folder?", "Delete {n} smart folders?"),
-                    tr("Only the smart folders go; the items they show stay."),
+                    tr("Only the smart folders go; the items they show stay.").to_string(),
                     tr("Delete"),
                 ),
-                Confirm::DeleteItems(ids) => (
-                    tr_n(ids.len(), "Delete {n} item permanently?", "Delete {n} items permanently?"),
-                    tr("The files are removed from the library and cannot be restored."),
-                    tr("Delete"),
-                ),
+                Confirm::DeleteItems(ids) => {
+                    let summary = crate::linked_ui::summarize_ids(lib, ids);
+                    (
+                        tr_n(ids.len(), "Delete {n} item permanently?", "Delete {n} items permanently?"),
+                        crate::linked_ui::permanent_delete_detail(summary),
+                        tr("Delete"),
+                    )
+                }
                 Confirm::DeleteTags(tags) => (
                     if let [one] = tags.as_slice() {
                         trf("Delete the tag “{tag}”?", &[("tag", one)])
                     } else {
                         tr_n(tags.len(), "Delete {n} tag?", "Delete {n} tags?")
                     },
-                    tr("They are removed from every item. The items themselves stay."),
+                    tr("They are removed from every item. The items themselves stay.").to_string(),
                     if tags.len() == 1 { tr("Delete Tag") } else { tr("Delete Tags") },
                 ),
                 Confirm::ClearTagHistory => (
                     tr("Clear the tag history?").to_string(),
-                    tr("The tag picker's Recent tags start over. Tags stay on their items."),
+                    tr("The tag picker's Recent tags start over. Tags stay on their items.").to_string(),
                     tr("Clear"),
                 ),
                 Confirm::EmptyTrash => {
-                    let n = lib.items().iter().filter(|i| i.is_deleted).count();
-                    (trf("Empty the Trash ({n})?", &[("n", &n)]), tr("The files are removed from the library and cannot be restored."), tr("Empty Trash"))
+                    let trashed: Vec<String> = lib.items().iter().filter(|i| i.is_deleted).map(|i| i.id.clone()).collect();
+                    let summary = crate::linked_ui::summarize_ids(lib, &trashed);
+                    (
+                        trf("Empty the Trash ({n})?", &[("n", &trashed.len())]),
+                        crate::linked_ui::permanent_delete_detail(summary),
+                        tr("Empty Trash"),
+                    )
                 }
-                Confirm::TrashInFolder(ids, _) => (
-                    tr_n(ids.len(), "Move {n} item to Trash?", "Move {n} items to Trash?"),
-                    tr("Some of them are in other folders as well."),
-                    if self.trash_folder_only { tr("Remove") } else { tr("Move to Trash") },
-                ),
+                Confirm::TrashInFolder(ids, _) => {
+                    let base = tr("Some of them are in other folders as well.");
+                    let detail = match crate::linked_ui::trash_linked_note(crate::linked_ui::summarize_ids(lib, ids)) {
+                        Some(note) => format!("{base} {note}"),
+                        None => base.to_string(),
+                    };
+                    (
+                        tr_n(ids.len(), "Move {n} item to Trash?", "Move {n} items to Trash?"),
+                        detail,
+                        if self.trash_folder_only { tr("Remove") } else { tr("Move to Trash") },
+                    )
+                }
                 Confirm::RestoreAll => {
                     let n = lib.items().iter().filter(|i| i.is_deleted).count();
                     (
                         tr_n(n, "Restore all {n} item in the Trash?", "Restore all {n} items in the Trash?"),
-                        tr("They go back to their folders. ⌘Z puts them back in the Trash."),
+                        tr("They go back to their folders. ⌘Z puts them back in the Trash.").to_string(),
                         tr("Restore All"),
                     )
                 }

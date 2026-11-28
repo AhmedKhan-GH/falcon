@@ -52,6 +52,17 @@ impl RecentItems {
     pub fn clear(&mut self, root: &Path) {
         self.0.remove(&key(root));
     }
+
+    /// Moves a library's list from `old` to `new` when the library moves.
+    pub fn rename_library(&mut self, old: &Path, new: &Path) {
+        let old_key = key(old);
+        let new_key = key(new);
+        if old_key != new_key
+            && let Some(items) = self.0.remove(&old_key)
+        {
+            self.0.entry(new_key).or_insert(items);
+        }
+    }
 }
 
 /// The item id of a library original (`images/<id>.info/<name>.<ext>`),
@@ -127,6 +138,18 @@ mod tests {
         assert!(r.list(Path::new("/s/B.library")).is_empty());
         r.clear(root);
         assert!(r.list(root).is_empty());
+    }
+
+    #[test]
+    fn renaming_a_library_keeps_its_recent_items() {
+        let old = Path::new("/s/A.library");
+        let new = Path::new("/Volumes/SSD/A.library");
+        let mut r = RecentItems::default();
+        r.add(old, "a");
+        r.add(old, "b");
+        r.rename_library(old, new);
+        assert!(r.list(old).is_empty());
+        assert_eq!(r.list(new), ids(&["b", "a"]));
     }
 
     #[test]

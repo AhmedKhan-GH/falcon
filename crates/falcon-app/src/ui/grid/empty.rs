@@ -97,11 +97,13 @@ fn paint(ui: &Ui, area: Rect, e: &Empty) -> egui::Pos2 {
     let x = area.center().x;
     icon(ui, egui::pos2(x, y + ICON_SIZE / 2.0), e.icon, ICON_SIZE, t::p().text_muted.gamma_multiply(0.6));
     y += ICON_SIZE + 14.0;
-    ui.painter().galley(egui::pos2(x - title.size().x / 2.0, y), title.clone(), t::p().text);
+    let title_x = x - (title.rect.min.x + title.rect.max.x) / 2.0;
+    ui.painter().galley(egui::pos2(title_x, y), title.clone(), t::p().text);
     y += title.size().y;
     if let Some(b) = body {
         y += 6.0;
-        ui.painter().galley(egui::pos2(x - b.size().x / 2.0, y), b.clone(), t::p().text_muted);
+        let body_x = x - (b.rect.min.x + b.rect.max.x) / 2.0;
+        ui.painter().galley(egui::pos2(body_x, y), b.clone(), t::p().text_muted);
         y += b.size().y;
     }
     egui::pos2(x, y + 16.0 + BUTTON_SIZE.y / 2.0)
@@ -212,5 +214,18 @@ mod tests {
         assert_eq!(title(View::Trash, false, 2), Some("Trash Is Empty"));
         let o = message(View::Other, false, 0).unwrap();
         assert_eq!((o.title, o.body), ("No Items", ""));
+    }
+
+    #[test]
+    fn empty_view_horizontal_alignment_is_centered() {
+        let ctx = egui::Context::default();
+        let mut output = ctx.run_ui(Default::default(), |ui| {
+            let area = egui::Rect::from_min_size(egui::pos2(100.0, 50.0), egui::vec2(800.0, 600.0));
+            let e = message(View::Folder { has_children: false, locked: false }, false, 0).unwrap();
+            let at = paint(ui, area, &e);
+            assert_eq!(at.x, area.center().x);
+            assert_eq!(at.x, 500.0);
+        });
+        output.textures_delta.clear();
     }
 }

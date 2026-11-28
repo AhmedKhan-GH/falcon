@@ -20,8 +20,10 @@ use crate::logic::{self, Scope};
 use crate::theme::{self as t, font};
 
 /// Whether an item may stand in as a folder's default cover.
-fn can_cover(item: &Item, locked: &HashSet<&str>) -> bool {
+pub(crate) fn can_cover(item: &Item, locked: &HashSet<&str>) -> bool {
     !item.is_deleted
+        && falcon_library::format_capability::is_preview_supported(&item.ext)
+        && !falcon_library::format_capability::is_sidecar(&item.ext)
         && item.ext != "txt"
         && item.extra.get("noPreview").and_then(|v| v.as_bool()) != Some(true)
         && !item.folders.iter().any(|f| locked.contains(f.as_str()))
@@ -52,9 +54,142 @@ pub fn cover<'a>(items: &'a [Item], folder: &Folder, order: OrderBy, increase: b
     let mut own: Vec<&Item> = items.iter().filter(|i| i.folders.contains(&folder.id) && can_cover(i, locked)).collect();
     if !own.is_empty() {
         search::sort(&mut own, order, increase);
+        if let Some(&visual) = own.iter().find(|i| falcon_library::format_capability::is_visual_preview(&i.ext)) {
+            return Some(visual);
+        }
         return own.first().copied();
     }
     folder.children.iter().find_map(|c| cover(items, c, order, increase, locked))
+}
+
+/// Up to 4 distinct items for a folder's mosaic cover.
+/// If `folder.cover_id` is set, it is placed first.
+/// Any remaining slots are filled with valid own items, and if fewer than 4,
+/// from descendant subfolders.
+pub fn mosaic_covers<'a>(
+    items: &'a [Item],
+    folder: &Folder,
+    order: OrderBy,
+    increase: bool,
+    locked: &HashSet<&str>,
+) -> Vec<&'a Item> {
+    if folder.is_locked() {
+        return Vec::new();
+    }
+
+    let mut result: Vec<&'a Item> = Vec::with_capacity(4);
+
+    // 1. Explicit cover_id takes precedence as primary item
+    if let Some(cid) = &folder.cover_id
+        && let Some(item) = items.iter().find(|i| i.id == *cid && can_cover(i, locked))
+    {
+        result.push(item);
+    }
+
+    // 2. Folder's own items
+    let mut own: Vec<&Item> = items
+        .iter()
+        .filter(|i| i.folders.contains(&folder.id) && can_cover(i, locked) && !result.iter().any(|r| r.id == i.id))
+        .collect();
+
+    if !own.is_empty() {
+        search::sort(&mut own, order, increase);
+        let (mut visual, non_visual): (Vec<&Item>, Vec<&Item>) = own
+            .into_iter()
+            .partition(|i| falcon_library::format_capability::is_visual_preview(&i.ext));
+        visual.extend(non_visual);
+
+        for item in visual {
+            if result.len() >= 4 {
+                break;
+            }
+            result.push(item);
+        }
+    }
+
+    // 3. Collect from descendant subfolders if fewer than 4 items
+    if result.len() < 4 && !folder.children.is_empty() {
+        collect_subfolder_covers(items, &folder.children, order, increase, locked, &mut result);
+    }
+
+    result
+}
+
+fn collect_subfolder_covers<'a>(
+    items: &'a [Item],
+    children: &[Folder],
+    order: OrderBy,
+    increase: bool,
+    locked: &HashSet<&str>,
+    result: &mut Vec<&'a Item>,
+) {
+    let mut next_level: Vec<&Folder> = Vec::new();
+
+    for child in children {
+        if result.len() >= 4 {
+            return;
+        }
+        if child.is_locked() {
+            continue;
+        }
+        if let Some(cid) = &child.cover_id
+            && let Some(item) = items.iter().find(|i| i.id == *cid && can_cover(i, locked))
+            && !result.iter().any(|r| r.id == item.id)
+        {
+            result.push(item);
+            if result.len() >= 4 {
+                return;
+            }
+        }
+        let mut own: Vec<&Item> = items
+            .iter()
+            .filter(|i| i.folders.contains(&child.id) && can_cover(i, locked) && !result.iter().any(|r| r.id == i.id))
+            .collect();
+        if !own.is_empty() {
+            search::sort(&mut own, order, increase);
+            let (mut visual, non_visual): (Vec<&Item>, Vec<&Item>) = own
+                .into_iter()
+                .partition(|i| falcon_library::format_capability::is_visual_preview(&i.ext));
+            visual.extend(non_visual);
+            for item in visual {
+                if result.len() >= 4 {
+                    return;
+                }
+                result.push(item);
+            }
+        }
+        for gc in &child.children {
+            next_level.push(gc);
+        }
+    }
+
+    if result.len() < 4 && !next_level.is_empty() {
+        for gc in next_level {
+            if result.len() >= 4 {
+                break;
+            }
+            if gc.is_locked() {
+                continue;
+            }
+            let mut own: Vec<&Item> = items
+                .iter()
+                .filter(|i| i.folders.contains(&gc.id) && can_cover(i, locked) && !result.iter().any(|r| r.id == i.id))
+                .collect();
+            if !own.is_empty() {
+                search::sort(&mut own, order, increase);
+                let (mut visual, non_visual): (Vec<&Item>, Vec<&Item>) = own
+                    .into_iter()
+                    .partition(|i| falcon_library::format_capability::is_visual_preview(&i.ext));
+                visual.extend(non_visual);
+                for item in visual {
+                    if result.len() >= 4 {
+                        break;
+                    }
+                    result.push(item);
+                }
+            }
+        }
+    }
 }
 
 const CARD_W: f32 = 150.0;
@@ -79,8 +214,8 @@ fn list_rows_cap(rows: usize, row_h: f32, avail: f32) -> f32 {
 }
 
 /// "N items · M subfolders" under a subfolder card, or at its row's right.
-fn folder_meta(lib: &Library, child: &Folder) -> String {
-    let count = lib.items().iter().filter(|i| !i.is_deleted && i.folders.contains(&child.id)).count();
+pub(crate) fn folder_meta(child: &Folder, counts: &std::collections::HashMap<String, usize>) -> String {
+    let count = counts.get(&child.id).copied().unwrap_or(0);
     let mut meta = tr_n(count, "{n} item", "{n} items");
     if !child.children.is_empty() {
         meta.push_str(&format!(" · {}", tr_n(child.children.len(), "{n} subfolder", "{n} subfolders")));
@@ -123,12 +258,15 @@ impl App {
                 }
                 ui.add_space(12.0);
                 ui.checkbox(&mut self.display.subfolders, egui::RichText::new(tr("Show subfolder contents")).size(12.5));
+                ui.add_space(12.0);
+                ui.checkbox(&mut self.display.hide_unsupported, egui::RichText::new(tr("Hide unsupported files")).size(12.5));
             });
         });
         if self.display.strip_collapsed {
             return;
         }
         let cards = logic::subfolder_cards(folder, self.display.subfolders);
+        let counts = self.folder_counts_for(lib);
         if self.ws.layout == logic::Layout::List {
             let row_h = list_row_height(self.tile);
             let h = list_rows_cap(cards.len(), row_h, ui.available_height());
@@ -149,7 +287,7 @@ impl App {
                         self.strip_cover(ui, lib, child, thumb, &locked, (side * 0.6).max(12.0));
                         let date = Rect::from_min_max(Pos2::new(row.right() - LIST_DATE_W - 10.0, row.top()), Pos2::new(row.right() - 10.0, row.bottom()));
                         p.text(date.right_center(), Align2::RIGHT_CENTER, logic::format_ms(child.modification_time), font(12.0), t::p().text_muted);
-                        let meta = galley(ui, &folder_meta(lib, child), font(12.0), t::p().text_muted, (row.width() * 0.3).max(60.0));
+                        let meta = galley(ui, &folder_meta(child, &counts), font(12.0), t::p().text_muted, (row.width() * 0.3).max(60.0));
                         let meta_x = date.left() - 10.0 - meta.size().x;
                         p.galley(Pos2::new(meta_x, row.center().y - meta.size().y / 2.0), meta, t::p().text_muted);
                         let name_x = thumb.right() + 10.0;
@@ -178,7 +316,7 @@ impl App {
                             // The name: a double-click renames the folder, as in Eagle.
                             let name_rect = Rect::from_min_size(Pos2::new(rect.left(), thumb.bottom() + 4.0), vec2(CARD_W, 19.0));
                             self.strip_name(ui, child, name_rect, Pos2::new(rect.left(), thumb.bottom() + 6.0));
-                            let g = galley(ui, &folder_meta(lib, child), font(11.5), t::p().text_muted, CARD_W);
+                            let g = galley(ui, &folder_meta(child, &counts), font(11.5), t::p().text_muted, CARD_W);
                             ui.painter().galley(Pos2::new(rect.left(), thumb.bottom() + 25.0), g, t::p().text_muted);
                             if resp.double_clicked() || resp.clicked() {
                                 open = Some(child.id.clone());
@@ -212,10 +350,10 @@ impl App {
                 let radius = if thumb.height() < 60.0 { 4 } else { 6 };
                 egui::Image::new((tex.id(), thumb.size())).uv(uv).corner_radius(CornerRadius::same(radius)).paint_at(ui, thumb.shrink(1.0));
             }
-            None if job_for(item, lib.root(), Tier::Grid).is_none() => ext_placeholder(ui, thumb, &item.ext),
+            None if job_for(lib, item, Tier::Grid).is_none() => ext_placeholder(ui, thumb, &item.ext),
             None => {}
         }
-        if let Some(j) = job_for(item, lib.root(), Tier::Grid) {
+        if let Some(j) = job_for(lib, item, Tier::Grid) {
             self.ws.frame_jobs.push(j);
         }
     }
@@ -253,7 +391,7 @@ impl App {
 
     /// Items dropped on a subfolder card or row go into it, as on a sidebar
     /// row (`target` lights up while they hover), and its right-click menu.
-    fn strip_drop_and_menu(&mut self, ui: &Ui, lib: &Library, child: &Folder, resp: &egui::Response, target: Rect, radius: CornerRadius) {
+    pub(crate) fn strip_drop_and_menu(&mut self, ui: &Ui, lib: &Library, child: &Folder, resp: &egui::Response, target: Rect, radius: CornerRadius) {
         if resp.dnd_hover_payload::<crate::app::DragItems>().is_some() {
             ui.painter().rect_filled(target, radius, t::p().primary.gamma_multiply(0.25));
             ui.painter().rect_stroke(target, radius, Stroke::new(1.5, t::p().primary), StrokeKind::Inside);
@@ -272,6 +410,10 @@ impl App {
             }
             self.folder_password_menu(ui, child);
             self.reset_cover_entry(ui, child, shut);
+            if self.ws.scope == Scope::Home && !shut {
+                ui.separator();
+                self.home_folder_menu(ui, lib, &child.id);
+            }
             if !shut {
                 ui.separator();
                 self.tree_export_menu(ui, crate::ui::dialogs::export::Target::Folder(child.id.clone()), true);
@@ -341,5 +483,93 @@ mod tests {
         assert_eq!(list_rows_cap(3, 40.0, 1000.0), 120.0, "few rows take their own height");
         assert_eq!(list_rows_cap(50, 40.0, 1000.0), 400.0, "many scroll inside 40% of the grid");
         assert_eq!(list_rows_cap(50, 40.0, 100.0), 80.0, "but always show two rows");
+    }
+
+    #[test]
+    fn cover_excludes_unsupported_and_sidecars_and_prioritizes_visual() {
+        let none = HashSet::new();
+        let folder = Folder::new("F", "Folder", 0);
+
+        // Folder with only sidecars and unsupported files
+        let mut sidecar_items = vec![item("xmp1", "F", 1), item("dop1", "F", 2)];
+        sidecar_items[0].ext = "xmp".into();
+        sidecar_items[1].ext = "dop".into();
+        assert_eq!(cover(&sidecar_items, &folder, OrderBy::Import, true, &none), None, "sidecars must not become covers");
+
+        // Folder with audio and image: visual image prioritized over audio
+        let mut mixed = vec![item("song", "F", 5), item("photo", "F", 1)];
+        mixed[0].ext = "mp3".into();
+        mixed[1].ext = "afphoto".into();
+        // Even though song is newer (time 5 vs 1), photo is visual so it must be prioritized
+        assert_eq!(
+            cover(&mixed, &folder, OrderBy::Import, true, &none).map(|i| i.id.as_str()),
+            Some("photo"),
+            "visual preview format prioritized for folder cover"
+        );
+    }
+
+    #[test]
+    fn mosaic_covers_selection_and_adaptive_fallback() {
+        let none = HashSet::new();
+
+        // 0 items
+        let empty_folder = Folder::new("E", "Empty", 0);
+        assert!(mosaic_covers(&[], &empty_folder, OrderBy::Import, true, &none).is_empty());
+
+        // 1 item -> Single cover
+        let items_1 = vec![item("i1", "F1", 1)];
+        let folder_1 = Folder::new("F1", "F1", 0);
+        let covers_1 = mosaic_covers(&items_1, &folder_1, OrderBy::Import, true, &none);
+        assert_eq!(covers_1.len(), 1);
+        assert_eq!(covers_1[0].id, "i1");
+
+        // 2 items -> 2-split
+        let items_2 = vec![item("i1", "F2", 1), item("i2", "F2", 2)];
+        let folder_2 = Folder::new("F2", "F2", 0);
+        let covers_2 = mosaic_covers(&items_2, &folder_2, OrderBy::Import, true, &none);
+        assert_eq!(covers_2.len(), 2);
+
+        // 3 items -> 3-balanced
+        let items_3 = vec![item("i1", "F3", 1), item("i2", "F3", 2), item("i3", "F3", 3)];
+        let folder_3 = Folder::new("F3", "F3", 0);
+        let covers_3 = mosaic_covers(&items_3, &folder_3, OrderBy::Import, true, &none);
+        assert_eq!(covers_3.len(), 3);
+
+        // 5 items -> bounded to 4 distinct items
+        let items_5 = vec![
+            item("i1", "F5", 1),
+            item("i2", "F5", 2),
+            item("i3", "F5", 3),
+            item("i4", "F5", 4),
+            item("i5", "F5", 5),
+        ];
+        let folder_5 = Folder::new("F5", "F5", 0);
+        let covers_5 = mosaic_covers(&items_5, &folder_5, OrderBy::Import, true, &none);
+        assert_eq!(covers_5.len(), 4, "bounded to 4 distinct items");
+
+        // Explicit cover_id takes precedence as #1 item
+        let mut folder_cover = Folder::new("F5", "FC", 0);
+        folder_cover.cover_id = Some("i3".into());
+        let covers_cov = mosaic_covers(&items_5, &folder_cover, OrderBy::Import, true, &none);
+        assert_eq!(covers_cov[0].id, "i3", "explicit cover_id must be first item in mosaic");
+        assert_eq!(covers_cov.len(), 4);
+
+        // Parent borrowing up to 4 from children when own items < 4
+        let mut parent = Folder::new("P", "Parent", 0);
+        let child = Folder::new("C", "Child", 0);
+        let items_nested = vec![
+            item("p1", "P", 1),
+            item("c1", "C", 2),
+            item("c2", "C", 3),
+            item("c3", "C", 4),
+        ];
+        parent.children.push(child);
+        let covers_parent = mosaic_covers(&items_nested, &parent, OrderBy::Import, true, &none);
+        assert_eq!(covers_parent.len(), 4, "parent collects remaining slots from subfolder");
+        assert_eq!(covers_parent[0].id, "p1");
+
+        // Locked folder returns 0
+        let locked: HashSet<&str> = ["F5"].into_iter().collect();
+        assert!(mosaic_covers(&items_5, &folder_5, OrderBy::Import, true, &locked).is_empty());
     }
 }

@@ -80,7 +80,7 @@ impl App {
         }
         let ctx = parent.ctx().clone();
         if self.model3d.view.as_ref().is_none_or(|v| v.id != item.id) {
-            let path = item.original_path(lib.root());
+            let Ok(path) = lib.resolved_source_path(&item.id) else { return false };
             self.model3d.view = Some(ModelView::open(&ctx, &item.id, path, &item.ext, self.model3d.settings.up));
         }
         self.model3d.mark_shown(&ctx);

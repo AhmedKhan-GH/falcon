@@ -48,7 +48,11 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 /// being committed, and `Ok(None)` is returned. The library is locked
 /// only to list candidates and to commit, never while files are read.
 pub fn import_one(path: &Path, opts: &ImportOptions, lib: &Mutex<Library>, queue: Option<&Queue>) -> Result<Option<String>> {
-    let staged = falcon_library::import::stage(path, opts)?;
+    let (root, mode) = {
+        let l = lock(lib);
+        (l.root().to_path_buf(), l.storage_mode())
+    };
+    let staged = falcon_library::import::stage_for(path, opts, Some(&root), mode)?;
     if let Some(q) = queue {
         let candidates = lock(lib).duplicate_candidates(staged.item().size, &staged.item().ext);
         if let Some(existing) = import_check::same_file(&staged.original(), &candidates) {

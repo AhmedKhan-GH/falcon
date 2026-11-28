@@ -1,6 +1,6 @@
 //! Loading and saving whole libraries.
 
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -9,7 +9,14 @@ use serde::de::DeserializeOwned;
 
 use crate::disk_name::on_disk;
 use crate::error::{Error, Result};
+use crate::fault::{self, FaultPoint};
+use crate::journal::{
+    self, JOURNAL_FILE, LibraryDiagnostic, RecoveryReport, dir_has_link_sidecar, is_staging_dir_name,
+    read_journal,
+};
+use crate::linked::{AiSourceCondition, AiSourceSnapshot, AssetStatus, LinkRecord, evaluate_ai_source, evaluate_status, is_linked_item, load_validated_sidecar, sidecar_path};
 use crate::model::{Folder, Item, LibraryMetadata, MtimeIndex, SavedFilter, Tags};
+use crate::storage_mode::{FalconConfig, StorageMode, WatchedFolder};
 use crate::undo::{Committed, Dirty, Transaction, WriteMode};
 
 const METADATA: &str = "metadata.json";
@@ -56,6 +63,10 @@ pub struct Library {
     /// Set when a `metadata.json` write was refused (see
     /// [`Library::take_conflict`]).
     conflict: bool,
+    /// Per-library Falcon config (`<library>/falcon.json`).
+    pub(crate) config: FalconConfig,
+    /// Non-destructive structural/recovery diagnostics found on open.
+    pub diagnostics: Vec<LibraryDiagnostic>,
 }
 
 impl Library {
@@ -79,28 +90,96 @@ impl Library {
         let mtime = read_json(&root.join(MTIME))?;
         let tags: Tags = read_json(&root.join(TAGS))?;
         let saved_filters: Vec<SavedFilter> = read_json(&root.join(FILTERS))?;
+        let mut config = FalconConfig::load_or_default(&root)?;
+        // A pass cut short by a crash would otherwise read as syncing forever.
+        if config.recover_interrupted_syncs() {
+            let _ = config.save(&root);
+        }
+        let mut diagnostics = Vec::new();
+        match read_journal(&root) {
+            Ok(Some(j)) => diagnostics.push(LibraryDiagnostic::InterruptedJournal {
+                kind: j.kind,
+                item_ids: j.item_ids,
+                linked_ids: j.linked_ids,
+                stage_dirs: j.stage_dirs,
+            }),
+            Ok(None) => {}
+            Err(reason) => diagnostics.push(LibraryDiagnostic::CorruptJournal {
+                path: journal::journal_path(&root),
+                reason,
+            }),
+        }
 
         let images = root.join(IMAGES);
         let mut dirs = Vec::new();
         for entry in fs::read_dir(&images).map_err(|e| Error::io(&images, e))? {
             let entry = entry.map_err(|e| Error::io(&images, e))?;
-            if entry.file_name().to_string_lossy().ends_with(".info") && entry.path().is_dir() {
-                dirs.push(entry.path());
+            let fname = entry.file_name();
+            let name = fname.to_string_lossy();
+            let path = entry.path();
+            if path.is_dir() {
+                if name.ends_with(".info") {
+                    dirs.push(path);
+                } else if is_staging_dir_name(&name) {
+                    diagnostics.push(LibraryDiagnostic::OrphanStagingDir {
+                        has_link_sidecar: dir_has_link_sidecar(&path),
+                        path,
+                    });
+                }
             }
         }
         let total = dirs.len();
         progress(0, total);
         let mut items = Vec::new();
         let mut skipped = Vec::new();
+        let mut seen_ids = HashSet::new();
         for (n, dir) in dirs.into_iter().enumerate() {
-            // One damaged item must not make the whole library unreadable.
+            // One damaged or mismatched item must not make the whole library unreadable;
+            // ID mismatches and duplicate IDs fail closed without mutating disk files.
             let file = dir.join(METADATA);
+            let stem = dir.file_name().map(|s| s.to_string_lossy()).unwrap_or_default();
+            let stem = stem.trim_end_matches(".info");
             match fs::read_to_string(&file).map_err(|e| e.to_string()).and_then(|t| Item::from_json_str(&t).map_err(|e| e.to_string())) {
-                Ok(item) => items.push(item),
-                Err(e) => skipped.push((dir, e)),
+                Ok(item) => {
+                    if item.id != stem {
+                        let reason = format!(
+                            "item id '{}' does not match folder stem '{}'",
+                            item.id, stem
+                        );
+                        diagnostics.push(LibraryDiagnostic::IdMismatch {
+                            dir: dir.clone(),
+                            folder_stem: stem.to_string(),
+                            item_id: item.id,
+                        });
+                        skipped.push((dir, reason));
+                    } else if !seen_ids.insert(item.id.clone()) {
+                        let reason = format!("duplicate item id '{}'", item.id);
+                        diagnostics.push(LibraryDiagnostic::DuplicateItemId {
+                            dir: dir.clone(),
+                            id: item.id,
+                        });
+                        skipped.push((dir, reason));
+                    } else {
+                        items.push(item);
+                    }
+                }
+                Err(e) => {
+                    diagnostics.push(LibraryDiagnostic::CorruptItem {
+                        dir: dir.clone(),
+                        reason: e.clone(),
+                    });
+                    skipped.push((dir, e));
+                }
             }
             if (n + 1) % 200 == 0 || n + 1 == total {
                 progress(n + 1, total);
+            }
+        }
+        for linked_id in &config.linked_ids {
+            if !seen_ids.contains(linked_id) {
+                diagnostics.push(LibraryDiagnostic::OrphanLinkedId {
+                    id: linked_id.clone(),
+                });
             }
         }
         skipped.sort();
@@ -122,6 +201,8 @@ impl Library {
             dirty: Dirty::default(),
             disk_stamp,
             conflict: false,
+            config,
+            diagnostics,
         })
     }
 
@@ -159,6 +240,12 @@ impl Library {
         &self.root
     }
 
+    /// Updates the in-memory root folder after the library folder was moved
+    /// on disk.
+    pub fn set_root(&mut self, root: PathBuf) {
+        self.root = root;
+    }
+
     /// All items (including trashed ones), sorted by id.
     pub fn items(&self) -> &[Item] {
         &self.items
@@ -193,6 +280,245 @@ impl Library {
         item.info_dir(&self.root)
     }
 
+    /// Default asset storage mode configured for this library (`Copy` by default).
+    pub fn storage_mode(&self) -> StorageMode {
+        self.config.storage_mode
+    }
+
+    /// Read-only view of the library's `falcon.json` configuration.
+    pub fn config(&self) -> &FalconConfig {
+        &self.config
+    }
+
+    /// Updates this library's default storage mode in `falcon.json` atomically.
+    /// Existing items are never migrated automatically.
+    pub fn set_storage_mode(&mut self, mode: StorageMode) -> Result<()> {
+        if self.config.storage_mode == mode && FalconConfig::path(&self.root).is_file() {
+            return Ok(());
+        }
+        let mut next = self.config.clone();
+        next.storage_mode = mode;
+        next.save(&self.root)?;
+        self.config = next;
+        Ok(())
+    }
+
+    /// Returns the registered watched folders for this library.
+    pub fn watched_folders(&self) -> Vec<WatchedFolder> {
+        self.config.watched_folders()
+    }
+
+    /// Atomically updates and persists the registered watched folders.
+    pub fn set_watched_folders(&mut self, folders: &[WatchedFolder]) -> Result<()> {
+        let mut next = self.config.clone();
+        next.set_watched_folders(folders);
+        next.save(&self.root)?;
+        self.config = next;
+        Ok(())
+    }
+
+    /// Adds or updates one watched folder configuration.
+    pub fn upsert_watched_folder(&mut self, wf: WatchedFolder) -> Result<()> {
+        let mut list = self.watched_folders();
+        if let Some(pos) = list.iter().position(|w| w.id == wf.id) {
+            list[pos] = wf;
+        } else {
+            list.push(wf);
+        }
+        self.set_watched_folders(&list)
+    }
+
+    /// Removes a watched folder configuration by its stable ID.
+    pub fn remove_watched_folder(&mut self, id: &str) -> Result<()> {
+        let mut list = self.watched_folders();
+        list.retain(|w| w.id != id);
+        self.set_watched_folders(&list)
+    }
+
+    /// Registers `id` as a linked item in `falcon.json` and persists atomically.
+    pub(crate) fn add_linked_id(&mut self, id: &str) -> Result<()> {
+        if self.write_mode == WriteMode::Batched {
+            if self.config.linked_ids.insert(id.to_string()) {
+                self.dirty.config = true;
+            }
+            return Ok(());
+        }
+        let mut next = self.config.clone();
+        if next.linked_ids.insert(id.to_string()) {
+            next.save(&self.root)?;
+            self.config = next;
+        }
+        Ok(())
+    }
+
+    /// Registers a batch of linked IDs in `falcon.json` with a single atomic save.
+    pub(crate) fn add_linked_ids_batch(&mut self, ids: &[String]) -> Result<()> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let mut next = self.config.clone();
+        let mut changed = false;
+        for id in ids {
+            changed |= next.linked_ids.insert(id.clone());
+        }
+        if changed {
+            next.save(&self.root)?;
+            self.config = next;
+        }
+        Ok(())
+    }
+
+    /// Non-destructive recovery and structural diagnostics recorded when opening.
+    pub fn diagnostics(&self) -> &[LibraryDiagnostic] {
+        &self.diagnostics
+    }
+
+    /// Explicitly reconciles a pending `.falcon-journal.json` from an interrupted
+    /// multi-file operation. Preserves unverified staging data and external sources.
+    pub fn recover_pending_journal(&mut self) -> Result<RecoveryReport> {
+        let mtime_path = self.root.join(MTIME);
+        let report = journal::reconcile_journal(
+            &self.root,
+            &mut self.config,
+            &self.items,
+            &mut self.mtime,
+            |mtime| write_json(&mtime_path, mtime),
+        )?;
+        let loaded_ids: BTreeSet<String> = self.items.iter().map(|i| i.id.clone()).collect();
+        self.diagnostics.retain(|d| {
+            !matches!(
+                d,
+                LibraryDiagnostic::InterruptedJournal { .. } | LibraryDiagnostic::OrphanLinkedId { .. }
+            )
+        });
+        for linked_id in &self.config.linked_ids {
+            if !loaded_ids.contains(linked_id) {
+                self.diagnostics.push(LibraryDiagnostic::OrphanLinkedId {
+                    id: linked_id.clone(),
+                });
+            }
+        }
+        Ok(report)
+    }
+
+    /// Removes `id` from `falcon.json`'s linked item set if present.
+    pub(crate) fn remove_linked_id(&mut self, id: &str) -> Result<()> {
+        if !self.config.linked_ids.contains(id) {
+            return Ok(());
+        }
+        let mut next = self.config.clone();
+        next.linked_ids.remove(id);
+        next.save(&self.root)?;
+        self.config = next;
+        Ok(())
+    }
+
+    /// Authoritative ownership & availability state for item `id`.
+    pub fn asset_status(&self, id: &str) -> Option<AssetStatus> {
+        let item = self.item(id)?;
+        Some(evaluate_status(&self.config, item, &self.root))
+    }
+
+    /// Whether `id` is tracked as a referenced asset (`falcon.json` or `falcon-link.json`).
+    pub fn is_linked_item(&self, id: &str) -> bool {
+        self.item(id).is_some_and(|item| is_linked_item(&self.config, item, &self.root))
+    }
+
+    /// Reads and structurally validates `id`'s `falcon-link.json` sidecar if linked.
+    pub fn link_record(&self, id: &str) -> Result<Option<LinkRecord>> {
+        let Some(item) = self.item(id) else {
+            return Err(Error::Refused(format!("unknown item {id}")));
+        };
+        load_validated_sidecar(&self.config, item, &self.root)
+    }
+
+    /// Last known external source path recorded in `falcon-link.json` (available even while Offline/Missing).
+    pub fn last_known_source_path(&self, id: &str) -> Option<PathBuf> {
+        self.link_record(id).ok().flatten().map(|r| r.source_path)
+    }
+
+    /// Safe read-only payload path resolution for Managed or currently-available Linked assets.
+    /// Fails closed on `Offline`, `Missing`, and `InvalidReference`.
+    pub fn resolved_source_path(&self, id: &str) -> Result<PathBuf> {
+        let Some(item) = self.item(id) else {
+            return Err(Error::Refused(format!("unknown item {id}")));
+        };
+        let status = evaluate_status(&self.config, item, &self.root);
+        match status {
+            AssetStatus::Managed => Ok(item.managed_storage_path(&self.root)),
+            AssetStatus::Linked => {
+                let record = load_validated_sidecar(&self.config, item, &self.root)?.ok_or_else(|| Error::AssetUnavailable {
+                    id: id.to_string(),
+                    status: AssetStatus::InvalidReference,
+                    path: None,
+                    reason: "linked sidecar missing".into(),
+                })?;
+                Ok(record.source_path)
+            }
+            AssetStatus::Offline | AssetStatus::Missing | AssetStatus::InvalidReference => {
+                let last = load_validated_sidecar(&self.config, item, &self.root).ok().flatten().map(|r| r.source_path);
+                Err(Error::AssetUnavailable {
+                    id: id.to_string(),
+                    status,
+                    path: last,
+                    reason: format!("referenced source is {status}"),
+                })
+            }
+        }
+    }
+
+    /// Atomically relinks a missing referenced asset to a new external file path.
+    pub fn relink_item_to_file(&mut self, id: &str, target_path: &Path) -> Result<LinkRecord> {
+        let item = self.item(id).cloned().ok_or_else(|| Error::Refused(format!("unknown item {id}")))?;
+        crate::relink::relink_item_to_file(&self.root, &item, target_path, false)
+    }
+
+    /// Scans a folder for matching candidates for missing items.
+    pub fn preview_relink_folder(&self, items: &[Item], folder: &Path) -> crate::relink::RelinkPreview {
+        crate::relink::preview_relink_folder(&self.root, items, folder)
+    }
+
+    /// Applies accepted relink pairs in batch atomically.
+    pub fn apply_relink_batch(&mut self, pairs: &[(String, PathBuf)]) -> Result<Vec<String>> {
+        crate::relink::apply_relink_batch(&self.root, &self.items, pairs)
+    }
+
+    /// Writable payload path inside the library bundle. Strictly refused for all
+    /// non-Managed items so source files outside the library are never modified.
+    pub fn managed_writable_path(&self, id: &str, action: &str) -> Result<PathBuf> {
+        let Some(item) = self.item(id) else {
+            return Err(Error::Refused(format!("unknown item {id}")));
+        };
+        let status = evaluate_status(&self.config, item, &self.root);
+        if status != AssetStatus::Managed {
+            return Err(Error::UnsupportedForLinkedAsset {
+                id: id.to_string(),
+                action: action.to_string(),
+                status,
+            });
+        }
+        Ok(item.managed_storage_path(&self.root))
+    }
+
+    /// Safe source availability classification for AI indexing/search.
+    pub fn ai_source_condition(&self, id: &str) -> AiSourceCondition {
+        let Some(item) = self.item(id) else {
+            return AiSourceCondition::Missing;
+        };
+        evaluate_ai_source(&self.config, item, &self.root)
+    }
+
+    /// Builds a lock-free [`AiSourceSnapshot`] for off-lock AI worker evaluation.
+    pub fn ai_source_snapshot(&self, item: &Item) -> AiSourceSnapshot {
+        AiSourceSnapshot {
+            item_id: item.id.clone(),
+            library_root: self.root.clone(),
+            managed_path: item.managed_storage_path(&self.root),
+            sidecar_path: sidecar_path(item, &self.root),
+            config_linked: self.config.linked_ids.contains(&item.id),
+        }
+    }
+
     /// Writes the library to `dest` (created if needed), copying each item's
     /// files and any other root entries (`backup/`, `Icon`, ...) unchanged,
     /// and regenerating the JSON files from the in-memory model.
@@ -204,8 +530,8 @@ impl Library {
             return Err(Error::SaveOntoSelf(dest.to_path_buf()));
         }
 
-        // Unmodelled root entries are copied verbatim.
-        let modelled = [METADATA, MTIME, TAGS, FILTERS, IMAGES];
+        // Unmodelled root entries are copied verbatim, excluding transient journal files.
+        let modelled = [METADATA, MTIME, TAGS, FILTERS, IMAGES, JOURNAL_FILE];
         for entry in fs::read_dir(&self.root).map_err(|e| Error::io(&self.root, e))? {
             let entry = entry.map_err(|e| Error::io(&self.root, e))?;
             if !modelled.iter().any(|m| entry.file_name() == *m) {
@@ -310,6 +636,7 @@ impl Library {
                 return Err(Error::SyncConflict(self.root.clone()));
             }
         }
+        fault::check(FaultPoint::MetadataWrite, &path)?;
         write_json(&path, &self.metadata)?;
         self.disk_stamp = self.metadata.modification_time;
         Ok(())
@@ -326,7 +653,11 @@ impl Library {
     /// Writes `mtime.json`, or marks it dirty in batched mode.
     pub(crate) fn write_mtime(&mut self) -> Result<()> {
         match self.write_mode {
-            WriteMode::Immediate => write_json(&self.root.join(MTIME), &self.mtime),
+            WriteMode::Immediate => {
+                let path = self.root.join(MTIME);
+                fault::check(FaultPoint::MtimeWrite, &path)?;
+                write_json(&path, &self.mtime)
+            }
             WriteMode::Batched => {
                 self.dirty.mtime = true;
                 Ok(())
@@ -341,14 +672,23 @@ impl Item {
         library_root.join(IMAGES).join(format!("{}.info", self.id))
     }
 
-    /// Path of the original file, `<name>.<ext>` inside the info dir.
-    pub fn original_path(&self, library_root: &Path) -> PathBuf {
+    /// Path of `<name>.<ext>` inside the item's `.info` folder.
+    ///
+    /// This only points to a real payload for [`crate::linked::AssetStatus::Managed`]
+    /// assets. Callers reading or mutating assets through a [`Library`] must use
+    /// [`Library::resolved_source_path`] or [`Library::managed_writable_path`] instead.
+    pub fn managed_storage_path(&self, library_root: &Path) -> PathBuf {
         let file = if self.ext.is_empty() {
             self.name.clone()
         } else {
             format!("{}.{}", self.name, self.ext)
         };
         self.info_dir(library_root).join(&*on_disk(&file))
+    }
+
+    /// Path of the referenced-asset sidecar (`<id>.info/falcon-link.json`).
+    pub fn link_record_path(&self, library_root: &Path) -> PathBuf {
+        sidecar_path(self, library_root)
     }
 
     /// The file name of the item's thumbnail, `<name>_thumbnail.png`.
@@ -428,10 +768,10 @@ fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T> {
     serde_json::from_slice(&bytes).map_err(|e| Error::json(path, e))
 }
 
-/// Eagle writes compact JSON with no trailing newline.
+/// Eagle writes compact JSON with no trailing newline, persisted atomically.
 pub(crate) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     let bytes = serde_json::to_vec(value).map_err(|e| Error::json(path, e))?;
-    fs::write(path, bytes).map_err(|e| Error::io(path, e))
+    crate::storage_mode::atomic_write_bytes(path, &bytes)
 }
 
 fn mkdir(p: &Path) -> Result<()> {

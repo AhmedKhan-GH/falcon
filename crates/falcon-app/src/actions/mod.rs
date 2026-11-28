@@ -26,7 +26,7 @@ use crate::shortcuts::{self, Shortcuts};
 /// The folder in falcon's app data holding one actions file per library
 /// (`~/Library/Application Support/Falcon/actions/` on macOS).
 pub fn store_dir() -> Option<PathBuf> {
-    eframe::storage_dir("Falcon").map(|d| d.join("actions"))
+    eframe::storage_dir(crate::app_data_name()).map(|d| d.join("actions"))
 }
 
 /// Running an action on this many items or more asks first, as Eagle's

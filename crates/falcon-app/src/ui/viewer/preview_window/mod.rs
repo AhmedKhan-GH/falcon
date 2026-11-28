@@ -90,7 +90,9 @@ impl Pane {
     /// The viewer for `item`; `gpu` says whether windows draw with wgpu
     /// (the 3D viewer needs it). A video FFmpeg plays sounds through `mixer`.
     fn open(ctx: &egui::Context, lib: &Library, item: &Item, autoplay: bool, gpu: bool, mixer: Option<&rodio::mixer::Mixer>) -> Pane {
-        let file = item.original_path(lib.root());
+        let Ok(file) = lib.resolved_source_path(&item.id) else {
+            return Pane::Picture;
+        };
         match kind_of(&item.ext) {
             Kind::Video => players::VideoPane::open(&file, autoplay, mixer).map_or(Pane::Picture, Pane::Video),
             Kind::Audio => players::AudioPane::open(&file, item).map_or(Pane::Picture, Pane::Audio),
@@ -365,13 +367,20 @@ impl App {
 
         // The picture: the full render, else the preview, else the type.
         for tier in [Tier::Full, Tier::Preview] {
-            if let Some(j) = job_for(item, lib.root(), tier) {
+            if let Some(j) = job_for(lib, item, tier) {
                 self.ws.frame_jobs.push(j);
             }
         }
-        let tex = self.ws.loader.get(&item.id, Tier::Full).cloned().or_else(|| self.ws.loader.get(&item.id, Tier::Preview).cloned());
+        let tex = self.ws.loader.get(&item.id, Tier::Full).cloned()
+            .or_else(|| self.ws.loader.get(&item.id, Tier::Preview).cloned())
+            .or_else(|| self.ws.loader.get(&item.id, Tier::Card).cloned())
+            .or_else(|| self.ws.loader.get(&item.id, Tier::Grid).cloned());
         let gray = self.modes.grayscale;
-        let file = item.original_path(lib.root());
+        let file = lib
+            .resolved_source_path(&item.id)
+            .ok()
+            .or_else(|| lib.last_known_source_path(&item.id))
+            .unwrap_or_else(|| item.managed_storage_path(lib.root()));
         let tf = pw.tf;
 
         let resp = ui.interact(full, ui.scope_id().with("preview-canvas"), Sense::click_and_drag());
@@ -395,7 +404,7 @@ impl App {
             Pane::Pending | Pane::Picture => false,
         };
         if !pw.custom {
-            let scale = pw.picture(ui, &resp, tex, item, lib.root(), full, self.modes.hide_navigator, &mut self.ws.loader, &mut self.ws.frame_jobs);
+            let scale = pw.picture(ui, &resp, tex, lib, item, full, self.modes.hide_navigator, &mut self.ws.loader, &mut self.ws.frame_jobs);
             self.ws.loader.set_pixelated(logic::pixelated_at(self.prefs.pixelated, scale));
         }
 
@@ -669,18 +678,30 @@ impl PreviewWin {
     /// (`ask_sharp`).
     /// Returns the zoom it was drawn at.
     #[allow(clippy::too_many_arguments)]
-    fn picture(&mut self, ui: &mut Ui, resp: &egui::Response, tex: Option<TextureHandle>, item: &Item, root: &std::path::Path, full: Rect, hide_navigator: bool, loader: &mut Loader, jobs: &mut Vec<Job>) -> f32 {
+    fn picture(&mut self, ui: &mut Ui, resp: &egui::Response, tex: Option<TextureHandle>, lib: &Library, item: &Item, full: Rect, hide_navigator: bool, loader: &mut Loader, jobs: &mut Vec<Job>) -> f32 {
         let ctx = ui.ctx().clone();
         let tf = self.tf;
-        if falcon_library::psd::handles(&item.ext.to_lowercase()) && !self.psd_opened {
+        if falcon_library::psd::handles(&item.ext.to_lowercase())
+            && !self.psd_opened
+            && let Ok(path) = lib.resolved_source_path(&item.id)
+        {
             self.psd_opened = true;
-            self.psd.open(&item.id, item.original_path(root), &ctx);
+            self.psd.open(&item.id, path, &ctx);
         }
         self.psd.poll();
         let natural = if let Some((w, h)) = self.psd.size(&item.id) {
             tf.size(w as f32, h as f32)
         } else if item.width > 0 && item.height > 0 {
-            tf.size(item.width as f32, item.height as f32)
+            if let Some(ref t) = tex {
+                let ts = t.size_vec2();
+                if (ts.x > ts.y && item.width < item.height) || (ts.y > ts.x && item.width > item.height) {
+                    tf.size(item.height as f32, item.width as f32)
+                } else {
+                    tf.size(item.width as f32, item.height as f32)
+                }
+            } else {
+                tf.size(item.width as f32, item.height as f32)
+            }
         } else {
             tex.as_ref().map_or(Vec2::splat(512.0), |t| tf.size(t.size_vec2().x, t.size_vec2().y))
         };
@@ -723,7 +744,7 @@ impl PreviewWin {
         }
         let r = Rect::from_center_size(full.center() + self.pan, natural * scale);
         let plain = crate::anim::kind(&item.ext).is_none();
-        let ask = SharpAsk { item, root, natural, r, area: full, tex: tex.as_ref(), tf, plain };
+        let ask = SharpAsk { item, lib, natural, r, area: full, tex: tex.as_ref(), tf, plain };
         let sharp = ask_sharp(ui, loader, jobs, &self.psd, &mut self.region_view, &ask);
         match (&tex, loader.original(&item.id).filter(|_| sharp.original)) {
             (_, Some(o)) => paint_tiles(ui.painter(), o, r, full),
@@ -921,6 +942,9 @@ mod tests {
 
     /// One frame of the picture at actual size; the jobs asked for.
     fn draw_at_actual_size(w: &mut PreviewWin, item: &Item) -> Vec<Job> {
+        let dir = tempfile::tempdir().unwrap();
+        let mut lib = Library::create(dir.path().join("T.library")).unwrap();
+        lib.items_mut().push(item.clone());
         let ctx = egui::Context::default();
         let mut loader = Loader::with_workers(&ctx, 1);
         let mut jobs = Vec::new();
@@ -929,7 +953,7 @@ mod tests {
         let mut out = ctx.run_ui(Default::default(), |ui| {
             let full = Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 800.0));
             let resp = ui.interact(full, ui.scope_id().with("canvas"), Sense::click_and_drag());
-            w.picture(ui, &resp, Some(tex.clone()), item, std::path::Path::new("/nowhere"), full, true, &mut loader, &mut jobs);
+            w.picture(ui, &resp, Some(tex.clone()), &lib, item, full, true, &mut loader, &mut jobs);
         });
         out.textures_delta.clear();
         jobs

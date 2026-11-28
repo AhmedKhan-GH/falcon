@@ -1,4 +1,4 @@
-//! Localisation: falcon's interface in eight languages.
+//! Localisation: falcon's interface in ten languages.
 //!
 //! Strings are keyed by their English text, which stays in the code:
 //!
@@ -40,11 +40,24 @@ pub enum Lang {
     Ru,
     ZhCn,
     ZhTw,
+    Id,
+    Ban,
 }
 
 impl Lang {
     /// Every language, in the order the preference lists them.
-    pub const ALL: [Lang; 8] = [Lang::En, Lang::ZhCn, Lang::ZhTw, Lang::Ja, Lang::Ko, Lang::De, Lang::Es, Lang::Ru];
+    pub const ALL: [Lang; 10] = [
+        Lang::En,
+        Lang::ZhCn,
+        Lang::ZhTw,
+        Lang::Ja,
+        Lang::Ko,
+        Lang::De,
+        Lang::Es,
+        Lang::Ru,
+        Lang::Id,
+        Lang::Ban,
+    ];
 
     /// The file name (without `.json`) and the saved value.
     pub fn code(self) -> &'static str {
@@ -57,6 +70,8 @@ impl Lang {
             Lang::Ru => "ru",
             Lang::ZhCn => "zh_CN",
             Lang::ZhTw => "zh_TW",
+            Lang::Id => "id",
+            Lang::Ban => "ban",
         }
     }
 
@@ -72,6 +87,8 @@ impl Lang {
             Lang::Ru => "Русский",
             Lang::ZhCn => "简体中文",
             Lang::ZhTw => "繁體中文",
+            Lang::Id => "Bahasa Indonesia",
+            Lang::Ban => "Basa Bali",
         }
     }
 
@@ -91,6 +108,8 @@ impl Lang {
             "ja" => Lang::Ja,
             "ko" => Lang::Ko,
             "ru" => Lang::Ru,
+            "id" => Lang::Id,
+            "ban" => Lang::Ban,
             "zh" => {
                 let rest: Vec<&str> = parts.collect();
                 let traditional = rest.iter().any(|p| matches!(*p, "hant" | "tw" | "hk" | "mo"));
@@ -113,6 +132,8 @@ impl Lang {
             Lang::Ru => include_str!("../../locales/ru.json"),
             Lang::ZhCn => include_str!("../../locales/zh_CN.json"),
             Lang::ZhTw => include_str!("../../locales/zh_TW.json"),
+            Lang::Id => include_str!("../../locales/id.json"),
+            Lang::Ban => include_str!("../../locales/ban.json"),
         }
     }
 
@@ -140,7 +161,7 @@ impl Lang {
                     "many"
                 }
             }
-            Lang::Ja | Lang::Ko | Lang::ZhCn | Lang::ZhTw => "other",
+            Lang::Ja | Lang::Ko | Lang::ZhCn | Lang::ZhTw | Lang::Id | Lang::Ban => "other",
         }
     }
 
@@ -149,7 +170,7 @@ impl Lang {
         match self {
             Lang::En | Lang::De | Lang::Es => &["one", "other"],
             Lang::Ru => &["one", "few", "many"],
-            Lang::Ja | Lang::Ko | Lang::ZhCn | Lang::ZhTw => &["other"],
+            Lang::Ja | Lang::Ko | Lang::ZhCn | Lang::ZhTw | Lang::Id | Lang::Ban => &["other"],
         }
     }
 }
@@ -237,7 +258,7 @@ type Catalogue = HashMap<String, Entry>;
 /// A language's translations, read once from the built-in file. A file
 /// that fails to parse (which the tests rule out) leaves it in English.
 fn catalogue(lang: Lang) -> &'static Catalogue {
-    static LOADED: [OnceLock<Catalogue>; 8] = [const { OnceLock::new() }; 8];
+    static LOADED: [OnceLock<Catalogue>; 10] = [const { OnceLock::new() }; 10];
     LOADED[lang.index()].get_or_init(|| serde_json::from_str(lang.source()).unwrap_or_default())
 }
 

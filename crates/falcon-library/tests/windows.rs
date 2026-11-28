@@ -76,8 +76,8 @@ fn a_mac_library_opens_and_keeps_its_names_byte_for_byte() {
         let item = lib.item(id).unwrap();
         assert_eq!(item.name, *name, "the name in the metadata is untouched");
         let info = item.info_dir(lib.root());
-        assert_eq!(item.original_path(lib.root()), info.join(file));
-        assert!(item.original_path(lib.root()).is_file(), "{file}");
+        assert_eq!(item.managed_storage_path(lib.root()), info.join(file));
+        assert!(item.managed_storage_path(lib.root()).is_file(), "{file}");
         assert!(item.thumbnail_path(lib.root()).is_none());
     }
     // Written back, every item and the library are what they were.
@@ -101,7 +101,7 @@ fn saving_an_edit_to_a_mac_name_does_not_write_outside_its_folder() {
     mac_library(&root);
     let mut lib = Library::open(&root).unwrap();
     // Redrawing writes the thumbnail, the file a stream would have caught.
-    make_large_png(&lib.item("M3KVWXDQ2B7CA").unwrap().original_path(lib.root()));
+    make_large_png(&lib.item("M3KVWXDQ2B7CA").unwrap().managed_storage_path(lib.root()));
     lib.refresh_thumbnail("M3KVWXDQ2B7CA").unwrap();
     let item = lib.item("M3KVWXDQ2B7CA").unwrap();
     assert_eq!(item.name, "a:b");
@@ -114,7 +114,7 @@ fn saving_an_edit_to_a_mac_name_does_not_write_outside_its_folder() {
     lib.update_item(renamed).unwrap();
     let item = lib.item("M3KVWXDQ2B7CA").unwrap();
     assert_eq!(item.name, "Renamed Now");
-    assert!(item.original_path(lib.root()).is_file());
+    assert!(item.managed_storage_path(lib.root()).is_file());
     assert!(item.thumbnail_path(lib.root()).is_some());
 }
 
@@ -171,7 +171,7 @@ fn a_pack_from_a_mac_unpacks_to_files_windows_can_keep() {
     assert_eq!(ids.len(), 1);
     let item = lib.item(&ids[0]).unwrap();
     assert_eq!(item.name, "a:b");
-    assert!(item.original_path(lib.root()).is_file(), "{:?}", item.original_path(lib.root()));
+    assert!(item.managed_storage_path(lib.root()).is_file(), "{:?}", item.managed_storage_path(lib.root()));
 }
 
 /// Unlike the names from a Mac, these are out to get somewhere else.
@@ -211,7 +211,7 @@ fn a_read_only_original_can_be_imported_renamed_and_removed() {
     item.name = "renamed".into();
     lib.update_item(item).unwrap();
     let item = lib.item(&id).unwrap();
-    assert!(item.original_path(lib.root()).is_file());
+    assert!(item.managed_storage_path(lib.root()).is_file());
     fs::remove_dir_all(item.info_dir(lib.root())).unwrap();
 }
 
@@ -224,7 +224,7 @@ fn a_device_name_imports_under_a_name_windows_can_keep() {
     let id = lib.import_file(&src, &ImportOptions { name: Some("NUL".into()), ..opts() }).unwrap();
     let item = lib.item(&id).unwrap();
     assert_eq!(item.name, "NUL_");
-    assert!(item.original_path(lib.root()).is_file());
+    assert!(item.managed_storage_path(lib.root()).is_file());
 }
 
 #[test]
@@ -242,7 +242,7 @@ fn a_library_past_max_path_works() {
     make_large_png(&src);
     let id = lib.import_file(&src, &opts()).unwrap();
     let item = lib.item(&id).cloned().unwrap();
-    assert!(item.original_path(lib.root()).is_file());
+    assert!(item.managed_storage_path(lib.root()).is_file());
     assert!(item.thumbnail_path(lib.root()).is_some());
     drop(lib);
     assert_eq!(Library::open(&root).unwrap().items().len(), 1);
@@ -278,7 +278,7 @@ fn saving_works_while_the_files_are_being_read() {
     let src = tmp.path().join("picture.txt");
     fs::write(&src, "first").unwrap();
     let id = lib.import_file(&src, &opts()).unwrap();
-    let raw = lib.item(&id).unwrap().original_path(lib.root());
+    let raw = lib.item(&id).unwrap().managed_storage_path(lib.root());
     let _open = [fs::File::open(root.join("metadata.json")).unwrap(), fs::File::open(&raw).unwrap()];
     lib.save_metadata().unwrap();
     lib.save_text(&id, "second").unwrap();

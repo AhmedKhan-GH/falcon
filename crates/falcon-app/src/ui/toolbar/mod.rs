@@ -26,7 +26,6 @@ fn shows_results(scope: &Scope, query: &str, filtered: bool) -> bool {
 impl App {
     pub(crate) fn toolbar(&mut self, ui: &mut Ui, lib: &Library) {
         let bar = ui.max_rect();
-        window_drag(ui, bar, "toolbar");
         let cy = bar.center().y;
         let mut x = bar.left() + logic::bar_inset(!self.show_sidebar);
         self.panels_button(ui, Pos2::new(x, cy));
@@ -73,11 +72,35 @@ impl App {
         }
         self.title_menu(lib, title_resp);
 
-        // Right side: search field, then the icon row.
-        let search = Rect::from_min_size(Pos2::new(bar.right() - 18.0 - 178.0, cy - 15.0), vec2(178.0, 30.0));
+        let own = self.own_sort(lib);
+        let refresh = matches!(self.ws.scope, Scope::Random(_)) || matches!(own, Some((_, Some((FolderOrder::Random, _)))));
+
+        // Dedicated space for inspector/sidebar panel toggle when closed
+        if !self.show_inspector {
+            let toggle_center = Pos2::new(bar.right() - 24.0, cy);
+            if icon_button(ui, toggle_center, ic::SIDEBAR_SIMPLE, 18.0, true, tr("Show inspector")).clicked() {
+                self.show_inspector = true;
+            }
+        }
+
+        // Right side: dynamic search field with reserved 8px spacing, then the icon row.
+        let toggle_reserved = if !self.show_inspector { 44.0 } else { 16.0 };
+        let search_right = bar.right() - toggle_reserved;
+
+        let mut num_icons = 3.0; // Filter, Layout, Plugins
+        if self.ai_view_allowed() { num_icons += 1.0; }
+        if refresh { num_icons += 1.0; }
+        if self.ws.scope != Scope::AllTags { num_icons += 1.0; }
+        let icons_width = num_icons * 26.0 + 20.0;
+
+        let avail_right = (search_right - (title_end + 30.0)).max(0.0);
+        let max_search_w = (avail_right - icons_width).max(90.0);
+        let desired_search_w = ((bar.width() - 500.0) * 0.15 + 130.0).clamp(110.0, 190.0);
+        let search_w = desired_search_w.min(max_search_w).clamp(90.0, 200.0);
+
+        let search = Rect::from_min_size(Pos2::new(search_right - search_w, cy - 15.0), vec2(search_w, 30.0));
         self.search_field(ui, search);
         let mut ix = search.left() - 20.0;
-        let own = self.own_sort(lib);
         let filter = icon_button(ui, Pos2::new(ix, cy), ic::FUNNEL, 18.0, true, tr("Filter"));
         ix -= 26.0;
         if self.ai_view_allowed() {
@@ -127,9 +150,45 @@ impl App {
 
         // Zoom slider between the title and the icons.
         let zx = (bar.left() + 237.0).max(title_end + 30.0);
-        if zx + 130.0 < icons_left {
-            self.zoom_slider(ui, Pos2::new(zx, cy));
+        let has_zoom = zx + 145.0 < icons_left;
+        let slider_dragged = if has_zoom {
+            self.zoom_slider(ui, Pos2::new(zx, cy))
+        } else {
+            false
+        };
+
+        // Window drag on empty toolbar regions only, strictly excluding all
+        // buttons, title, icons, search, and the zoom slider zone.
+        let drag_start = (title_end + 6.0).max(bar.left());
+        let zoom_left = (zx - 16.0).max(drag_start);
+        let zoom_right = (zx + 140.0).min(icons_left);
+        if has_zoom {
+            if zoom_left > drag_start {
+                window_drag(ui, Rect::from_min_max(Pos2::new(drag_start, bar.top()), Pos2::new(zoom_left, bar.bottom())), "toolbar-left");
+            }
+            if zoom_right < icons_left {
+                window_drag(ui, Rect::from_min_max(Pos2::new(zoom_right, bar.top()), Pos2::new(icons_left, bar.bottom())), "toolbar-right");
+            }
+        } else if icons_left > drag_start {
+            window_drag(ui, Rect::from_min_max(Pos2::new(drag_start, bar.top()), Pos2::new(icons_left, bar.bottom())), "toolbar");
         }
+
+        // Disable native macOS 28pt titlebar dragging whenever the pointer is
+        // over interactive toolbar controls (especially the zoom slider) or
+        // while the zoom slider is actively being dragged.
+        let over_zoom = has_zoom && ui.input(|i| {
+            i.pointer.hover_pos().is_some_and(|p| {
+                bar.y_range().contains(p.y) && (zoom_left..=zoom_right).contains(&p.x)
+            })
+        });
+        let over_controls = ui.input(|i| {
+            i.pointer.hover_pos().is_some_and(|p| {
+                bar.contains(p) && (p.x >= icons_left || p.x <= title_rect.left())
+            })
+        });
+        let movable = !(slider_dragged || over_zoom || over_controls);
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::NULL.with("window_movable"), movable));
+
         ui.painter().hline(bar.x_range(), bar.bottom() - 0.5, Stroke::new(1.0, t::p().main));
     }
 
@@ -293,30 +352,82 @@ impl App {
         }
     }
 
-    pub(crate) fn zoom_slider(&mut self, ui: &mut Ui, left_center: Pos2) {
+    pub(crate) fn zoom_slider(&mut self, ui: &mut Ui, left_center: Pos2) -> bool {
         let cy = left_center.y;
         let x0 = left_center.x;
-        if icon_button(ui, Pos2::new(x0, cy), ic::MINUS, 13.0, true, "").clicked() {
-            self.tile = (self.tile - 20.0).max(TILE_MIN);
+        let can_zoom_out = self.tile > TILE_MIN;
+        let can_zoom_in = self.tile < TILE_MAX;
+
+        // Minus button (26x26, centered at x0)
+        let minus_center = Pos2::new(x0, cy);
+        if icon_button(ui, minus_center, ic::MINUS, 13.0, can_zoom_out, tr("Zoom out (⌘−)")).clicked() {
+            self.tile = (self.tile - 20.0).max(TILE_MIN).round();
+            if let Some(id) = self.ws.selected.first().cloned() {
+                self.ws.scroll_to = Some(id);
+            }
         }
-        let track = Rect::from_min_max(Pos2::new(x0 + 16.0, cy - 8.0), Pos2::new(x0 + 104.0, cy + 8.0));
-        if icon_button(ui, Pos2::new(x0 + 120.0, cy), ic::PLUS, 13.0, true, "").clicked() {
-            self.tile = (self.tile + 20.0).min(TILE_MAX);
+
+        // Track starts safely past minus button (minus button rect is x0-13 .. x0+13)
+        // With thumb radius 6.0, track_left = x0 + 22.0 gives thumb left edge at x0 + 16.0 (3px clear gap)
+        let track_left = x0 + 22.0;
+        let track_width = 80.0;
+        let track_right = track_left + track_width; // x0 + 102.0
+
+        // Plus button (26x26, center at track_right + 22.0 = x0 + 124.0)
+        // Plus button rect is x0 + 111.0 .. x0 + 137.0
+        // When thumb is at max, thumb center is at x0 + 102.0, thumb right edge is at x0 + 108.0 (3px clear gap)
+        let plus_center = Pos2::new(track_right + 22.0, cy);
+        if icon_button(ui, plus_center, ic::PLUS, 13.0, can_zoom_in, tr("Zoom in (⌘+)")).clicked() {
+            self.tile = (self.tile + 20.0).min(TILE_MAX).round();
+            if let Some(id) = self.ws.selected.first().cloned() {
+                self.ws.scroll_to = Some(id);
+            }
         }
-        let resp = ui.interact(track, ui.scope_id().with("zoom"), Sense::click_and_drag());
+
+        // Expanded interactive hit area covering full track and thumb bounds
+        let hit_track = Rect::from_min_max(
+            Pos2::new(track_left - 8.0, cy - 15.0),
+            Pos2::new(track_right + 8.0, cy + 15.0),
+        );
+        let resp = ui.interact(hit_track, ui.scope_id().with("zoom-slider"), Sense::click_and_drag());
+
+        if resp.hovered() || resp.dragged() {
+            ui.ctx().set_cursor_icon(if resp.dragged() { egui::CursorIcon::Grabbing } else { egui::CursorIcon::Grab });
+        }
+
         if let Some(pos) = resp.interact_pointer_pos()
-            && (resp.dragged() || resp.clicked())
+            && (resp.drag_started() || resp.dragged() || resp.clicked())
         {
-            let f = ((pos.x - track.left()) / track.width()).clamp(0.0, 1.0);
-            self.tile = TILE_MIN + f * (TILE_MAX - TILE_MIN);
+            let f = ((pos.x - track_left) / track_width).clamp(0.0, 1.0);
+            let new_tile = (TILE_MIN + f * (TILE_MAX - TILE_MIN)).round();
+            if (new_tile - self.tile).abs() >= 1.0 {
+                self.tile = new_tile;
+                if let Some(id) = self.ws.selected.first().cloned() {
+                    self.ws.scroll_to = Some(id);
+                }
+            }
         }
-        let f = (self.tile - TILE_MIN) / (TILE_MAX - TILE_MIN);
+
+        let f = ((self.tile - TILE_MIN) / (TILE_MAX - TILE_MIN)).clamp(0.0, 1.0);
         let p = ui.painter();
-        let y = track.center().y;
-        p.line_segment([Pos2::new(track.left(), y), Pos2::new(track.right(), y)], Stroke::new(2.0, t::p().divider));
-        let kx = track.left() + f * track.width();
-        p.line_segment([Pos2::new(track.left(), y), Pos2::new(kx, y)], Stroke::new(2.0, t::p().text_muted));
-        p.circle_filled(Pos2::new(kx, y), 7.0, Color32::WHITE);
+        let y = cy;
+
+        // Inactive background track
+        p.line_segment([Pos2::new(track_left, y), Pos2::new(track_right, y)], Stroke::new(2.0, t::p().divider));
+
+        // Active highlighted track
+        let kx = track_left + f * track_width;
+        if kx > track_left {
+            p.line_segment([Pos2::new(track_left, y), Pos2::new(kx, y)], Stroke::new(2.0, t::p().primary));
+        }
+
+        // Thumb styling with visual feedback
+        let thumb_r = if resp.dragged() { 7.5 } else if resp.hovered() { 7.0 } else { 6.0 };
+        if resp.hovered() || resp.dragged() {
+            p.circle_filled(Pos2::new(kx, y), thumb_r + 2.5, t::p().primary.gamma_multiply(0.35));
+        }
+        p.circle_filled(Pos2::new(kx, y), thumb_r, Color32::WHITE);
+        resp.dragged() || resp.drag_started()
     }
 
     /// The import progress bar; clears itself a moment after finishing.
@@ -327,6 +438,15 @@ impl App {
         };
         let (total, done, failed, current, paused, started) = snapshot;
         if total == 0 {
+            if let Some(worker) = &self.ws.thumb_worker {
+                let tp = worker.progress();
+                if tp.active && tp.total > 0 {
+                    let f = (tp.done as f32 / tp.total as f32).clamp(0.0, 1.0);
+                    let bar = Rect::from_min_size(rect.min, vec2(rect.width() * f, 2.0));
+                    ui.painter().rect_filled(bar, 0.0, t::p().primary.gamma_multiply(0.8));
+                    return true;
+                }
+            }
             return false;
         }
         if done >= total {
@@ -378,5 +498,45 @@ mod tests {
         assert!(shows_results(&Scope::All, "cat", false));
         assert!(shows_results(&Scope::Folder("F".into()), "", true), "a filter alone counts");
         assert!(!shows_results(&Scope::AllTags, "cat", true), "the tag page filters tags");
+    }
+
+    #[test]
+    fn zoom_slider_geometry_has_no_button_overlap() {
+        let x0 = 100.0;
+        let minus_rect = Rect::from_center_size(Pos2::new(x0, 20.0), Vec2::splat(26.0));
+        let track_left = x0 + 22.0;
+        let track_width = 80.0;
+        let track_right = track_left + track_width;
+        let plus_rect = Rect::from_center_size(Pos2::new(track_right + 22.0, 20.0), Vec2::splat(26.0));
+
+        let thumb_r = 6.0;
+        let min_thumb_left = track_left - thumb_r;
+        let max_thumb_right = track_right + thumb_r;
+
+        assert!(min_thumb_left > minus_rect.right(), "min thumb edge ({min_thumb_left}) must clear minus button right ({})", minus_rect.right());
+        assert!(max_thumb_right < plus_rect.left(), "max thumb edge ({max_thumb_right}) must clear plus button left ({})", plus_rect.left());
+    }
+
+    #[test]
+    fn search_and_toggle_button_spacing_prevents_overlap() {
+        let bar_right = 1000.0;
+        let show_inspector = false;
+        let toggle_reserved = if !show_inspector { 44.0 } else { 16.0 };
+        let search_right = bar_right - toggle_reserved;
+
+        let toggle_center_x = bar_right - 24.0;
+        let toggle_left_edge = toggle_center_x - 12.0; // button has 24px width
+        let gap = toggle_left_edge - search_right;
+
+        assert!(gap >= 8.0, "gap between search and toggle button must be at least 8px, got {gap}");
+    }
+
+    #[test]
+    fn zoom_slider_quantizes_to_whole_pixels() {
+        for f in [0.0, 0.12345, 0.33333, 0.5, 0.7777, 1.0] {
+            let tile = (TILE_MIN + f * (TILE_MAX - TILE_MIN)).round();
+            assert_eq!(tile.fract(), 0.0, "tile size must be an integer to prevent layout jitter");
+            assert!((TILE_MIN..=TILE_MAX).contains(&tile));
+        }
     }
 }

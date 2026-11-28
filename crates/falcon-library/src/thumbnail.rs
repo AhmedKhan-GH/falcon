@@ -52,7 +52,7 @@ pub fn max_side(ext: &str) -> u32 {
         e if crate::model3d::EXTENSIONS.contains(&e) => crate::model3d::raster::CANVAS + 2 * crate::model3d::raster::PADDING,
         "ico" | "icns" => 512,
         "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "psd" | "psdt" | "ai" | "ait" | "eps" | "hdr" | "exr" | "dds"
-        | "cr3" => 480,
+        | "cr3" | "af" | "afdesign" | "afphoto" | "afpub" | "aftemplate" => 480,
         _ => DEFAULT_MAX_SIDE,
     }
 }
@@ -220,7 +220,7 @@ fn jpeg_frame_pixels(jpeg: &[u8]) -> Option<u64> {
 /// documents such as PDFs.
 pub const QUICKLOOK_SIZE: u32 = 1024;
 /// How long a QuickLook render may take.
-pub const QUICKLOOK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+pub const QUICKLOOK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(6);
 
 /// Why [`quicklook_until`] gave no picture.
 #[derive(Debug)]
@@ -330,7 +330,13 @@ pub fn svg_size(data: &[u8]) -> Result<(u32, u32), ThumbError> {
 }
 
 fn parse_svg(data: &[u8]) -> Result<resvg::usvg::Tree, ThumbError> {
-    let tree = resvg::usvg::Tree::from_data(data, &resvg::usvg::Options::default()).map_err(ThumbError::new)?;
+    let mut opts = resvg::usvg::Options {
+        resources_dir: None,
+        ..Default::default()
+    };
+    // Never resolve external filesystem or URL references inside SVGs during offline rendering.
+    opts.image_href_resolver.resolve_string = Box::new(|_, _| None);
+    let tree = resvg::usvg::Tree::from_data(data, &opts).map_err(ThumbError::new)?;
     let s = tree.size().to_int_size();
     if s.width() == 0 || s.height() == 0 {
         return Err(ThumbError("SVG has no size".into()));
@@ -341,6 +347,23 @@ fn parse_svg(data: &[u8]) -> Result<resvg::usvg::Tree, ThumbError> {
 /// Renders an SVG. With `max`, it is drawn straight at [`target_size`];
 /// without, at its natural size.
 pub fn render_svg(data: &[u8], max: Option<u32>) -> Result<DynamicImage, ThumbError> {
+    render_svg_with_limit(data, max, MAX_WEBP_SIDE * 2)
+}
+
+/// Renders an SVG file with explicit file-size and output-dimension bounds.
+pub fn render_svg_bounded(path: &Path, target_short_side: u32, max_file_bytes: u64, max_dim: u32) -> Result<DynamicImage, ThumbError> {
+    let meta = fs::metadata(path).map_err(ThumbError::new)?;
+    if !meta.is_file() {
+        return Err(ThumbError("SVG path is not a regular file".into()));
+    }
+    if meta.len() > max_file_bytes {
+        return Err(ThumbError("SVG file exceeds size limit".into()));
+    }
+    let data = fs::read(path).map_err(ThumbError::new)?;
+    render_svg_with_limit(&data, Some(target_short_side), max_dim)
+}
+
+fn render_svg_with_limit(data: &[u8], max: Option<u32>, max_dim: u32) -> Result<DynamicImage, ThumbError> {
     use resvg::tiny_skia::{Pixmap, Transform};
     let tree = parse_svg(data)?;
     let natural = tree.size().to_int_size();
@@ -348,7 +371,7 @@ pub fn render_svg(data: &[u8], max: Option<u32>) -> Result<DynamicImage, ThumbEr
         Some(m) => target_size(natural.width(), natural.height(), m),
         None => (natural.width(), natural.height()),
     };
-    if w > MAX_WEBP_SIDE * 2 || h > MAX_WEBP_SIDE * 2 {
+    if w > max_dim || h > max_dim {
         return Err(ThumbError("SVG too large to render".into()));
     }
     let mut pixmap = Pixmap::new(w, h).ok_or_else(|| ThumbError("cannot allocate pixmap".into()))?;
@@ -631,7 +654,13 @@ impl crate::Library {
     /// Re-reads the original's file times and redraws thumbnail and palette,
     /// then saves the item.
     pub(crate) fn redraw_item(&mut self, item: crate::model::Item) -> crate::Result<()> {
-        let item = redrawn(self.root(), item)?;
+        let status = self.asset_status(&item.id).unwrap_or(crate::linked::AssetStatus::Managed);
+        let raw = if status == crate::linked::AssetStatus::Managed {
+            item.managed_storage_path(self.root())
+        } else {
+            self.resolved_source_path(&item.id)?
+        };
+        let item = redrawn_with_path(self.root(), &raw, item)?;
         self.update_item(item)
     }
 }
@@ -666,13 +695,17 @@ pub fn custom_thumbnailed(root: &Path, mut item: crate::model::Item, image: &Pat
 }
 
 /// The file work of Refresh Thumbnail, without the library: re-reads the
-/// original's file times, redraws thumbnail and palette, and returns the
+/// source's file times, redraws thumbnail and palette, and returns the
 /// item as it should be saved.
-pub fn redrawn(root: &Path, mut item: crate::model::Item) -> crate::Result<crate::model::Item> {
-    let raw = item.original_path(root);
-    crate::import::restat(&mut item, &raw)?;
+pub fn redrawn(root: &Path, item: crate::model::Item) -> crate::Result<crate::model::Item> {
+    let raw = crate::linked::resolve_item_read_path(root, &item)?;
+    redrawn_with_path(root, &raw, item)
+}
+
+fn redrawn_with_path(root: &Path, raw: &Path, mut item: crate::model::Item) -> crate::Result<crate::model::Item> {
+    crate::import::restat(&mut item, raw)?;
     let thumb = item.info_dir(root).join(item.thumbnail_name());
-    if !crate::import::redraw(&mut item, &raw, &thumb) {
+    if !crate::import::redraw(&mut item, raw, &thumb) {
         return Err(refused(root, format!("cannot draw a thumbnail for {}.{}", item.name, item.ext)));
     }
     Ok(item)
@@ -851,5 +884,29 @@ mod tests {
         assert!(!plan_raster("jpg", 100, 100, 2 << 20).thumbnail);
         assert!(plan_svg(99_999).remove_thumbnail == Some(true));
         assert!(plan_svg(100_000).no_thumbnail.is_none());
+    }
+
+    #[test]
+    fn svg_render_bounded_blocks_external_refs_and_enforces_limits() {
+        let tmp = tempfile::tempdir().unwrap();
+        let secret_png = tmp.path().join("secret.png");
+        RgbaImage::from_pixel(32, 32, image::Rgba([255, 0, 0, 255])).save(&secret_png).unwrap();
+        let svg_with_ext = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#00f"/><image href="{}" x="0" y="0" width="64" height="64"/></svg>"##,
+            secret_png.display()
+        );
+        let path = tmp.path().join("ext.svg");
+        fs::write(&path, svg_with_ext.as_bytes()).unwrap();
+        let rendered = render_svg_bounded(&path, 64, 1 << 20, 512).unwrap().to_rgba8();
+        // External image must NOT have been loaded over the blue background.
+        assert_eq!(rendered.get_pixel(32, 32).0, [0, 0, 255, 255]);
+
+        // Oversized file byte limit rejects cleanly.
+        assert!(render_svg_bounded(&path, 64, 16, 512).is_err());
+
+        // Extreme aspect dimensions exceeding max_dim reject cleanly.
+        let wide_svg = tmp.path().join("wide.svg");
+        fs::write(&wide_svg, br##"<svg xmlns="http://www.w3.org/2000/svg" width="10000" height="1"><rect width="10000" height="1" fill="#f00"/></svg>"##).unwrap();
+        assert!(render_svg_bounded(&wide_svg, 320, 1 << 20, 4096).is_err());
     }
 }

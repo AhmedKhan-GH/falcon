@@ -63,6 +63,10 @@ pub struct State {
     pub show_comments: bool,
     /// Show Subfolder Content is on.
     pub subfolders: bool,
+    /// Hide Unsupported Files is on.
+    pub hide_unsupported: bool,
+    /// Show Path Bar is on.
+    pub path_bar: bool,
     pub fullscreen: bool,
     /// Open libraries.
     pub libraries: usize,
@@ -148,7 +152,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::NewSubfolder => grid && s.scope == ScopeKind::Folder,
         C::NewTextFile | C::NewMenu => s.library,
         // The panels can be toggled anywhere, the viewer included.
-        C::ToggleSidebar | C::ToggleInspector | C::ToggleAll => true,
+        C::ToggleSidebar | C::ToggleInspector | C::ToggleAll | C::TogglePathBar => true,
         // In the viewer they zoom the image, else the grid.
         C::ZoomIn | C::ZoomOut => s.library,
         C::ZoomActual | C::ZoomFit => s.library && s.viewer,
@@ -163,11 +167,11 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
             grid && matches!(s.scope, ScopeKind::Folder | ScopeKind::Smart) && s.picked_folders < 2 && s.picked_smart < 2
         }
         C::MoveFolder => grid && (s.scope == ScopeKind::Folder || s.picked_folders > 0),
-        C::MergeLibrary | C::EmptyCacheReload | C::ImportPack | C::ImportInboard => s.library,
+        C::MergeLibrary | C::MoveLibrary | C::EmptyCacheReload | C::ImportPack | C::ImportInboard | C::LibrarySettings => s.library,
         C::LockApp => s.lockable,
         C::NewLibrary | C::LoadLibrary | C::ClearLibraryHistory | C::SwitchLibrary | C::CollectWindow | C::NotificationCenter | C::Preferences | C::CloseWindow | C::Minimize | C::FullScreen | C::WindowZoom => true,
         C::NextLibrary | C::PreviousLibrary => s.libraries > 1,
-        C::Page(_) | C::Import | C::ImportFolders | C::ImportLinks | C::FindDuplicates => s.library,
+        C::Page(_) | C::Import | C::ImportFolders | C::ImportAsCopy | C::ImportAsLink | C::ImportFoldersAsCopy | C::ImportFoldersAsLink | C::ImportLinks | C::FindDuplicates => s.library,
         C::Scroll(_) | C::SelectFirst | C::SelectLast | C::ToggleFolders => grid,
         C::ParentFolder => grid && s.parent,
         C::Reshuffle => grid && (s.scope == ScopeKind::Random || s.random_sorted),
@@ -189,7 +193,7 @@ pub fn enabled(cmd: Command, s: &State) -> bool {
         C::CombineImages => s.library && s.combinable,
         C::Documentation => s.docs,
         C::ShowTips | C::ErrorLogs | C::About | C::DebugReport | C::ColorSpace(_) => true,
-        C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders => s.library,
+        C::ToggleName | C::ToggleInfo | C::ToggleComments | C::ToggleSubfolders | C::ToggleHideUnsupported => s.library,
         C::AlwaysOnTop => true,
         C::Grayscale | C::Navigator => s.library,
         C::OpenNewWindow => s.library && (s.viewer || s.selected > 0),
@@ -233,6 +237,8 @@ pub enum Check {
     Info,
     Comments,
     Subfolders,
+    HideUnsupported,
+    PathBar,
     Presentation,
     AlwaysOnTop,
     Grayscale,
@@ -255,6 +261,8 @@ impl Check {
             Check::Info => s.show_info,
             Check::Comments => s.show_comments,
             Check::Subfolders => s.subfolders,
+            Check::HideUnsupported => s.hide_unsupported,
+            Check::PathBar => s.path_bar,
             Check::Presentation => s.presenting,
             Check::AlwaysOnTop => s.on_top,
             Check::Grayscale => s.grayscale,
@@ -323,7 +331,18 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             item("Import Folders…", Command::ImportFolders),
             item("Import Links…", Command::ImportLinks),
             item("Import Files…", Command::Import),
-            Entry::Sub("Import", &[item("Eagle Package…", Command::ImportPack), item("Inboard Backup…", Command::ImportInboard)]),
+            Entry::Sub(
+                "Import",
+                &[
+                    item("Files (Copy to Library)…", Command::ImportAsCopy),
+                    item("Files (Link / Place)…", Command::ImportAsLink),
+                    item("Folders (Copy to Library)…", Command::ImportFoldersAsCopy),
+                    item("Folders (Link / Place)…", Command::ImportFoldersAsLink),
+                    SEP,
+                    item("Eagle Package…", Command::ImportPack),
+                    item("Inboard Backup…", Command::ImportInboard),
+                ],
+            ),
             Entry::Sub(
                 "Export",
                 &[
@@ -342,7 +361,9 @@ pub static MENUS: &[(&str, &[Entry])] = &[
         &[
             item("New Library…", Command::NewLibrary),
             item("Open Library…", Command::SwitchLibrary),
+            item("Library Settings…", Command::LibrarySettings),
             item("Merge Library…", Command::MergeLibrary),
+            item("Move Library…", Command::MoveLibrary),
             SEP,
             item("Clear Library History…", Command::ClearLibraryHistory),
             item("Empty Cache and Reload…", Command::EmptyCacheReload),
@@ -473,6 +494,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
         &[
             checked("Always on Top", Command::AlwaysOnTop, Check::AlwaysOnTop),
             SEP,
+            checked("Home", Command::Page(Page::Home), Check::Page(Page::Home)),
             checked("All Items", Command::Page(Page::All), Check::Page(Page::All)),
             checked("Uncategorized", Command::Page(Page::Uncategorized), Check::Page(Page::Uncategorized)),
             checked("Untagged", Command::Page(Page::Untagged), Check::Page(Page::Untagged)),
@@ -490,6 +512,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             checked("Show Item Info", Command::ToggleInfo, Check::Info),
             checked("Show Comment Count", Command::ToggleComments, Check::Comments),
             checked("Show Subfolder Content", Command::ToggleSubfolders, Check::Subfolders),
+            checked("Hide Unsupported Files", Command::ToggleHideUnsupported, Check::HideUnsupported),
             SEP,
             item("Scroll to Top", Command::Scroll(Scroll::Top)),
             item("Scroll to Bottom", Command::Scroll(Scroll::Bottom)),
@@ -514,6 +537,7 @@ pub static MENUS: &[(&str, &[Entry])] = &[
             SEP,
             checked("Sidebar", Command::ToggleSidebar, Check::Sidebar),
             checked("Inspector", Command::ToggleInspector, Check::Inspector),
+            checked("Show Path Bar", Command::TogglePathBar, Check::PathBar),
             item("Show or Hide Both Panels", Command::ToggleAll),
             checked("Presentation Mode", Command::Presentation, Check::Presentation),
             SEP,
@@ -1202,10 +1226,11 @@ mod tests {
         let titles: Vec<&str> = MENUS.iter().map(|m| m.0).collect();
         assert_eq!(titles, ["File", "Library", "Edit", "Find", "Organize", "View", "Window", "Help"]);
         let keys = Shortcuts::default();
-        // Always on Top comes first, then the View pages, ⌘1 to ⌘7.
+        // Always on Top comes first, then Home and the View pages, ⌘1 to ⌘7.
         let view = MENUS.iter().find(|m| m.0 == "View").unwrap().1;
         assert!(matches!(&view[0], Entry::Item(i) if i.cmd == Command::AlwaysOnTop));
-        let pages: Vec<String> = view.iter().skip(2).take(7).filter_map(|e| if let Entry::Item(i) = e { chord(i.cmd, &keys).map(|c| crate::shortcuts::format(&c)) } else { None }).collect();
+        assert!(matches!(&view[2], Entry::Item(i) if i.cmd == Command::Page(Page::Home)));
+        let pages: Vec<String> = view.iter().skip(3).take(7).filter_map(|e| if let Entry::Item(i) = e { chord(i.cmd, &keys).map(|c| crate::shortcuts::format(&c)) } else { None }).collect();
         assert_eq!(pages, (1..=7).map(|n| format!("Command + {n}")).collect::<Vec<_>>());
     }
 
@@ -1369,7 +1394,7 @@ mod tests {
         assert!(!enabled(Command::NextLibrary, &s));
         assert!(enabled(Command::NewLibrary, &s));
         assert!(enabled(Command::ClearLibraryHistory, &s));
-        for c in [Command::MergeLibrary, Command::EmptyCacheReload, Command::ImportPack, Command::ImportInboard] {
+        for c in [Command::MergeLibrary, Command::MoveLibrary, Command::EmptyCacheReload, Command::ImportPack, Command::ImportInboard] {
             assert!(!enabled(c, &s), "{c:?} needs a library");
             assert!(enabled(c, &State { library: true, ..Default::default() }), "{c:?}");
         }

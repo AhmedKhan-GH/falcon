@@ -9,11 +9,9 @@ use eframe::egui::{self, Pos2, Rect, Ui, vec2};
 use falcon_library::Library;
 use falcon_library::search::OrderBy;
 
-use crate::icons as ic;
 use crate::logic::{self, Layout};
-use crate::locale::tr;
 use crate::theme as t;
-use crate::ui::widgets::{galley, icon_button};
+use crate::ui::widgets::galley;
 
 pub(crate) mod actions;
 pub(crate) mod ai_search;
@@ -28,6 +26,7 @@ pub(crate) mod navigation;
 pub(crate) mod open_queue;
 pub(crate) mod page_shots;
 pub(crate) mod state;
+pub(crate) mod sync_tick;
 pub(crate) mod sounds;
 pub(crate) mod system;
 
@@ -103,6 +102,8 @@ pub struct App {
     pub(crate) notice_window_open: bool,
     /// Move to Trash (for a library) is asking for confirmation (`ui/dialogs/remove_library.rs`).
     pub(crate) remove_library: Option<crate::ui::dialogs::remove_library::RemoveLibrary>,
+    /// Move Library (`ui/dialogs/move_library.rs`).
+    pub(crate) move_library: crate::ui::dialogs::move_library::State,
     /// The library tools' dialogs (`ui/dialogs/tools.rs`).
     pub(crate) tools: crate::ui::dialogs::tools::Tools,
     /// The localhost check of the running API (`api_check.rs`).
@@ -172,6 +173,8 @@ pub struct App {
     /// Layouts remembered per view, the fallback from before, and the
     /// display options (see `ui/toolbar/layout_panel.rs`).
     pub(crate) layouts: HashMap<String, Layout>,
+    /// Home Dashboard hero and cover choices per library path (`home_lib.rs`).
+    pub(crate) home_libs: HashMap<String, crate::home_lib::HomeLib>,
     pub(crate) legacy_layout: Option<Layout>,
     pub(crate) display: logic::Display,
     /// Reload the shown library from disk next frame (the layout panel's
@@ -187,6 +190,8 @@ pub struct App {
     pub(crate) tag_look: crate::tags::TagLook,
     /// Emoji folder icons and their textures (`folder_emoji.rs`).
     pub(crate) folder_emoji: crate::folder_emoji_tex::FolderEmojis,
+    /// Last opened scope for StartupDestination::LastOpened.
+    pub(crate) last_scope: Option<crate::logic::Scope>,
     /// The auto-import folder's watcher and what it has handed over
     /// (`auto_import.rs`).
     pub(crate) auto_import: crate::auto_import::AutoImport,
@@ -272,6 +277,7 @@ impl App {
             notices: Default::default(),
             notice_window_open: false,
             remove_library: None,
+            move_library: Default::default(),
             tools: Default::default(),
             api_check: Default::default(),
             force_close: None,
@@ -304,6 +310,7 @@ impl App {
             menu_bar: Default::default(),
             user_actions: Default::default(),
             layouts: HashMap::new(),
+            home_libs: HashMap::new(),
             legacy_layout: None,
             display: Default::default(),
             refresh: false,
@@ -312,6 +319,7 @@ impl App {
             folds: Folds::default(),
             tag_look: Default::default(),
             folder_emoji: Default::default(),
+            last_scope: None,
             auto_import: Default::default(),
             modes: Default::default(),
             preview: Vec::new(),
@@ -351,6 +359,7 @@ impl App {
         app.notices.trim();
         app.legacy_layout = saved.layout;
         app.layouts = saved.layouts;
+        app.home_libs = saved.home_libs;
         app.display = saved.display;
         app.prefs = saved.prefs.sanitized();
         let lang = app.prefs.language.resolve();
@@ -376,6 +385,7 @@ impl App {
         app.folds = saved.folds;
         app.tag_look = saved.tag_look;
         app.folder_emoji.store = saved.folder_emoji;
+        app.last_scope = saved.last_scope;
         app.text_zoom = saved.text_zoom.unwrap_or(0).min(crate::textdoc::ZOOM_LEVELS - 1);
         app.auto_import.imported = Arc::new(Mutex::new(saved.auto_imported));
         app.font_look = saved.font_look.unwrap_or_default();
@@ -385,9 +395,15 @@ impl App {
         // command line (focused if it was already open).
         app.missing = crate::workspaces::missing_shown(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
         let (libraries, active) = crate::workspaces::restore(&saved.libraries, saved.active, saved.library.as_deref(), |p| p.is_dir());
-        // Each is read behind the loading screen; the command line's
-        // starting view waits until they are open (`app/open_queue.rs`).
-        let show = initial.or_else(|| libraries.get(active).cloned());
+        // In QA mode, enforce strict isolation: reject saved production libraries and
+        // validate target path against authorized sandbox boundaries.
+        let (show, libraries) = match crate::qa_isolation::sanitize_startup_libraries(initial, libraries) {
+            Ok((s, libs)) => (s.or_else(|| libs.get(active).cloned()), libs),
+            Err(e) => {
+                crate::errlog::error(&format!("QA Security Isolation violation: {e}"));
+                panic!("QA Security Isolation violation: {e}");
+            }
+        };
         app.queue_launch(libraries, show, launch);
         crate::links::set_repaint(&app.ctx);
         crate::open_files::set_repaint(&app.ctx);
@@ -471,6 +487,8 @@ impl eframe::App for App {
         self.page_shots_tick(&ctx);
         crate::colorspace::sync(frame, self.prefs.color_space);
         crate::vibrancy::sync_main_window(frame, self.vibrancy_on());
+        let movable = ctx.data(|d| d.get_temp::<bool>(egui::Id::NULL.with("window_movable")).unwrap_or(true));
+        crate::vibrancy::set_window_movable(frame, movable);
         let state = self.menu_state(&ctx);
         self.menu_bar.sync(&ctx, &self.shortcuts, &state, &self.user_actions.menu_entries());
     }
@@ -480,6 +498,7 @@ impl App {
     /// One frame of the main window.
     pub(crate) fn draw(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        ctx.data_mut(|d| d.insert_temp(egui::Id::NULL.with("window_movable"), true));
         if ctx.cumulative_frame_nr() == 0 {
             // Come to the front on launch, like any Mac app.
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
@@ -516,6 +535,39 @@ impl App {
         self.sync_layout();
         self.follow_modes(&ctx);
         t::follow_system(&ctx);
+        // A workspace whose thumbnail worker was stopped (a library move) gets a new one.
+        if self.ws.thumb_worker.is_none()
+            && let (Some(shared), Some(r)) = (&self.ws.lib, &self.ws.root)
+        {
+            let w = std::sync::Arc::new(crate::thumb_worker::ThumbWorker::new(std::sync::Arc::clone(shared), r.clone(), ctx.clone(), true));
+            let items = lock(shared).items().to_vec();
+            w.rediscover_pending(&items);
+            self.ws.thumb_worker = Some(w);
+        }
+        if let Some(worker) = &self.ws.thumb_worker {
+            if self.ws.root.as_ref() != Some(worker.root()) {
+                worker.shutdown();
+                self.ws.thumb_worker = match (&self.ws.lib, &self.ws.root) {
+                    (Some(shared), Some(r)) => {
+                        let w = std::sync::Arc::new(crate::thumb_worker::ThumbWorker::new(
+                            std::sync::Arc::clone(shared),
+                            r.clone(),
+                            ctx.clone(),
+                            true,
+                        ));
+                        let items = lock(shared).items().to_vec();
+                        w.rediscover_pending(&items);
+                        Some(w)
+                    }
+                    _ => None,
+                };
+            } else {
+                for id in worker.take_completed() {
+                    self.ws.loader.forget(&id);
+                }
+            }
+        }
+        self.sync_tick(&ctx);
         self.ws.loader.poll(&ctx);
         let title = match &self.ws.root {
             Some(r) => r.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
@@ -576,6 +628,7 @@ impl App {
         self.reload_confirm(&ctx);
         self.clear_history_dialog(&ctx);
         self.remove_library_dialog(&ctx);
+        self.move_library_dialog(&ctx);
         self.force_close_dialog(&ctx);
         self.switch_warning_dialog(&ctx);
         self.poll_api_check();
@@ -651,7 +704,15 @@ impl App {
             self.inspector_width = shown.response.rect.width();
         }
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t::p().main)).show(ui, |ui| {
-            let full = ui.max_rect();
+            let mut full = ui.max_rect();
+            let show_path_bar = self.prefs.show_path_bar && !self.modes.presenting;
+            let path_bar_rect = if show_path_bar {
+                let r = Rect::from_min_max(Pos2::new(full.left(), full.bottom() - crate::ui::path_bar::PATH_BAR_HEIGHT), full.max);
+                full.max.y -= crate::ui::path_bar::PATH_BAR_HEIGHT;
+                Some(r)
+            } else {
+                None
+            };
             if self.ws.viewer.is_some() {
                 // Eagle's detail mode: the viewer, with its own bar, takes
                 // the place of the toolbar, filter bar and grid, between
@@ -676,12 +737,6 @@ impl App {
                 let bar = Rect::from_min_size(full.min, vec2(full.width(), t::BAR_HEIGHT));
                 let mut top = ui.new_child(egui::UiBuilder::new().max_rect(bar));
                 self.toolbar(&mut top, lib);
-                if !self.show_inspector {
-                    let c = Pos2::new(bar.right() - 24.0, bar.center().y);
-                    if icon_button(&mut top, c, ic::SIDEBAR_SIMPLE, 18.0, true, tr("Show inspector")).clicked() {
-                        self.show_inspector = true;
-                    }
-                }
                 let mut grid_top = bar.bottom();
                 let pb = Rect::from_min_size(Pos2::new(full.left(), grid_top), vec2(full.width(), 26.0));
                 let mut pui = ui.new_child(egui::UiBuilder::new().max_rect(pb));
@@ -701,13 +756,18 @@ impl App {
                 self.error_toast(ui, Pos2::new(full.center().x, grid_top + 10.0));
             }
 
+            if let Some(pbr) = path_bar_rect {
+                let mut pb_ui = ui.new_child(egui::UiBuilder::new().max_rect(pbr));
+                self.path_bar(&mut pb_ui, lib, pbr);
+            }
+
             self.status_toast(ui, &ctx, full);
         });
         // Playback stops when the viewer closes or moves to another item.
         if self.audio.loaded().is_some() && self.audio.loaded() != self.ws.viewer.as_deref() {
             self.audio.stop();
         }
-        self.drop_hint(&ctx);
+        self.drop_hint(&ctx, lib.storage_mode());
         self.capture_notice_ui(&ctx);
         self.video.keep_only(self.ws.viewer.as_deref());
         self.fetches.prune((self.ws.view.id.as_str() == self.ws.viewer.as_deref().unwrap_or_default()).then_some(self.ws.view.file.as_path()));
@@ -716,6 +776,8 @@ impl App {
         if self.ws.smart_dialog.is_some() {
             self.smart_dialog_ui(&ctx, lib);
         }
+        self.library_settings_dialog(&ctx, lib);
+        self.relink_dialog(&ctx, lib);
         self.organize_dialogs(&ctx, lib);
         self.tag_picker_ui(&ctx, lib);
         self.quick_switch_ui(&ctx, lib);
@@ -744,6 +806,7 @@ impl App {
             Some(Switch::Focus(i)) => self.request_focus(i),
             Some(Switch::Close(i)) => self.request_close(i),
             Some(Switch::Merge) => self.merge_library(),
+            Some(Switch::Move(p)) => self.start_move_library(p),
             None => {}
         }
         self.run_import_request();

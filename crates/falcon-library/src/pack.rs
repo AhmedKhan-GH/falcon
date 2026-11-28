@@ -42,23 +42,31 @@ pub enum PackSource<'a> {
     Smart(&'a str),
 }
 
+#[derive(Debug, Clone)]
+struct PackItem {
+    id: String,
+    /// When the item is Linked, `(resolved_source_path, on_disk_entry_name)` bundles the
+    /// external payload into `<id>.info/<on_disk_entry_name>` without copying `falcon-link.json`.
+    linked_payload: Option<(PathBuf, String)>,
+}
+
 /// A pack worked out but not yet written (see [`plan_pack`]). It holds no
 /// reference to the library, so it can be written on another thread.
 #[derive(Debug, Clone)]
 pub struct PackPlan {
     root: PathBuf,
     pack_json: Vec<u8>,
-    ids: Vec<String>,
+    items: Vec<PackItem>,
 }
 
 impl PackPlan {
     /// The number of items in the pack.
     pub fn len(&self) -> usize {
-        self.ids.len()
+        self.items.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.ids.is_empty()
+        self.items.is_empty()
     }
 }
 
@@ -90,7 +98,22 @@ pub fn export_pack(lib: &Library, source: PackSource<'_>, dest: &Path) -> Result
 pub fn plan_pack(lib: &Library, source: PackSource<'_>) -> Result<PackPlan> {
     let dest = lib.root();
     let refuse = |reason: String| Error::Pack { path: dest.to_path_buf(), reason };
-    let mut images: Vec<(u64, Value)> = Vec::new();
+    let resolve_pack_item = |item: &Item| -> Result<PackItem> {
+        let status = lib.asset_status(&item.id).unwrap_or(crate::linked::AssetStatus::Managed);
+        match status {
+            crate::linked::AssetStatus::Managed => Ok(PackItem { id: item.id.clone(), linked_payload: None }),
+            crate::linked::AssetStatus::Linked => {
+                let src = lib.resolved_source_path(&item.id).map_err(|e| refuse(e.to_string()))?;
+                let file = if item.ext.is_empty() { item.name.clone() } else { format!("{}.{}", item.name, item.ext) };
+                let entry_name = crate::disk_name::on_disk(&file).into_owned();
+                Ok(PackItem { id: item.id.clone(), linked_payload: Some((src, entry_name)) })
+            }
+            crate::linked::AssetStatus::Offline | crate::linked::AssetStatus::Missing | crate::linked::AssetStatus::InvalidReference => {
+                Err(refuse(format!("cannot pack {status} referenced asset '{}' ({})", item.name, item.id)))
+            }
+        }
+    };
+    let mut images: Vec<(u64, Value, PackItem)> = Vec::new();
     let mut folder_record = None;
     match source {
         PackSource::Folder(id) => {
@@ -100,7 +123,7 @@ pub fn plan_pack(lib: &Library, source: PackSource<'_>) -> Result<PackPlan> {
                 subtree.insert(f.id.as_str());
             });
             for item in lib.items().iter().filter(|i| !i.is_deleted && i.folders.iter().any(|f| subtree.contains(f.as_str()))) {
-                images.push((item.modification_time, to_record(item)?));
+                images.push((item.modification_time, to_record(item)?, resolve_pack_item(item)?));
             }
             folder_record = Some(clone_tree(folder));
         }
@@ -108,11 +131,12 @@ pub fn plan_pack(lib: &Library, source: PackSource<'_>) -> Result<PackPlan> {
             let record = find_smart_record(&lib.metadata.smart_folders, id).ok_or_else(|| refuse(format!("no smart folder {id}")))?;
             let new_id = ids::new_id();
             for item in lib.smart_folder_items(id) {
+                let pack_item = resolve_pack_item(item)?;
                 let mut record = to_record(item)?;
                 if let Value::Object(m) = &mut record {
                     m.insert("folders".into(), json!([new_id]));
                 }
-                images.push((item.modification_time, record));
+                images.push((item.modification_time, record, pack_item));
             }
             folder_record = Some(clone_smart(record, &new_id));
         }
@@ -120,6 +144,7 @@ pub fn plan_pack(lib: &Library, source: PackSource<'_>) -> Result<PackPlan> {
             let mut seen = HashSet::new();
             for id in ids.iter().filter(|id| seen.insert(id.as_str())) {
                 let item = lib.item(id).ok_or_else(|| refuse(format!("no item {id}")))?;
+                let pack_item = resolve_pack_item(item)?;
                 let mut record = to_record(item)?;
                 if let Value::Object(m) = &mut record {
                     m.insert("folders".into(), json!([]));
@@ -127,20 +152,24 @@ pub fn plan_pack(lib: &Library, source: PackSource<'_>) -> Result<PackPlan> {
                         m.shift_remove("isDeleted");
                     }
                 }
-                images.push((item.modification_time, record));
+                images.push((item.modification_time, record, pack_item));
             }
         }
     }
     // Stable, like Eagle's sort, so ties keep library order.
-    images.sort_by_key(|(t, _)| std::cmp::Reverse(*t));
+    images.sort_by_key(|(t, _, _)| std::cmp::Reverse(*t));
 
     let mut pack = Map::new();
-    pack.insert("images".into(), Value::Array(images.iter().map(|(_, v)| v.clone()).collect()));
+    pack.insert("images".into(), Value::Array(images.iter().map(|(_, v, _)| v.clone()).collect()));
     if let Some(f) = folder_record {
         pack.insert("folder".into(), f);
     }
     let pack_json = serde_json::to_vec(&pack).map_err(|e| Error::json(dest, e))?;
-    Ok(PackPlan { root: lib.root().to_path_buf(), pack_json, ids: images.iter().map(|(_, v)| record_id(v)).collect() })
+    Ok(PackPlan {
+        root: lib.root().to_path_buf(),
+        pack_json,
+        items: images.into_iter().map(|(_, _, p)| p).collect(),
+    })
 }
 
 /// Writes a planned pack to `dest`, calling `on_item` with the number of
@@ -161,12 +190,12 @@ pub fn write_pack_until(plan: &PackPlan, dest: &Path, on_item: impl FnMut(usize)
     let refuse = |reason: String| Error::Pack { path: dest.to_path_buf(), reason };
     let parent = dest.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
     let mut tmp = tempfile::NamedTempFile::new_in(parent).map_err(|e| Error::io(parent, e))?;
-    let Some(entries) = write_zip(&plan.root, tmp.as_file_mut(), &plan.pack_json, &plan.ids, on_item).map_err(|e| refuse(e.to_string()))? else {
+    let Some(entries) = write_zip(&plan.root, tmp.as_file_mut(), &plan.pack_json, &plan.items, on_item).map_err(|e| refuse(e.to_string()))? else {
         return Ok(None);
     };
     verify(tmp.path(), entries).map_err(refuse)?;
     tmp.persist(dest).map_err(|e| Error::io(dest, e.error))?;
-    Ok(Some(plan.ids.len()))
+    Ok(Some(plan.items.len()))
 }
 
 /// What importing a pack would do, read before asking (Eagle confirms the
@@ -355,10 +384,6 @@ fn to_record(item: &Item) -> Result<Value> {
     serde_json::to_value(item).map_err(|e| Error::json(&item.id, e))
 }
 
-fn record_id(v: &Value) -> String {
-    v.get("id").and_then(Value::as_str).unwrap_or_default().to_string()
-}
-
 /// A folder and its subtree with the keys Eagle copies into a pack, in its
 /// order; keys a folder doesn't have are left out.
 fn clone_tree(f: &Folder) -> Value {
@@ -476,16 +501,16 @@ fn duplicate_key(item: &Item) -> Option<String> {
     }
 }
 
-fn write_zip(root: &Path, file: &mut File, pack_json: &[u8], ids: &[String], mut on_item: impl FnMut(usize) -> bool) -> io::Result<Option<usize>> {
+fn write_zip(root: &Path, file: &mut File, pack_json: &[u8], items: &[PackItem], mut on_item: impl FnMut(usize) -> bool) -> io::Result<Option<usize>> {
     let mut zip = ZipWriter::new(file);
     let base = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
     let mut entries = 1;
     zip.start_file(PACK_JSON, base.last_modified_time(zip_time(SystemTime::now())).unix_permissions(0o644))?;
     zip.write_all(pack_json)?;
-    for (n, id) in ids.iter().enumerate() {
-        let dir = root.join("images").join(format!("{id}.info"));
+    for (n, item) in items.iter().enumerate() {
+        let dir = root.join("images").join(format!("{}.info", item.id));
         if dir.is_dir() {
-            entries += add_dir(&mut zip, base, &dir, &format!("{id}.info/"))?;
+            entries += add_dir(&mut zip, base, &dir, &format!("{}.info/", item.id), item.linked_payload.as_ref())?;
         }
         if !on_item(n + 1) {
             return Ok(None);
@@ -495,9 +520,16 @@ fn write_zip(root: &Path, file: &mut File, pack_json: &[u8], ids: &[String], mut
     Ok(Some(entries))
 }
 
-/// Adds `dir` (as `name`, ending in `/`) and everything under it; returns
-/// the number of entries written.
-fn add_dir<W: Write + io::Seek>(zip: &mut ZipWriter<W>, base: SimpleFileOptions, dir: &Path, name: &str) -> io::Result<usize> {
+/// Adds `dir` (as `name`, ending in `/`) and everything under it; for linked
+/// items, strips `falcon-link.json` and bundles the external payload as a normal
+/// managed file so the `.eaglepack` stays pure Eagle-compatible.
+fn add_dir<W: Write + io::Seek>(
+    zip: &mut ZipWriter<W>,
+    base: SimpleFileOptions,
+    dir: &Path,
+    name: &str,
+    linked_payload: Option<&(PathBuf, String)>,
+) -> io::Result<usize> {
     let meta = fs::metadata(dir)?;
     zip.add_directory(name, base.last_modified_time(zip_time(meta.modified()?)).unix_permissions(mode(&meta, 0o755)))?;
     let mut count = 1;
@@ -505,9 +537,19 @@ fn add_dir<W: Write + io::Seek>(zip: &mut ZipWriter<W>, base: SimpleFileOptions,
     children.sort_by_key(|e| e.file_name());
     for entry in children {
         let path = entry.path();
-        let child = format!("{name}{}", entry.file_name().to_string_lossy());
+        let fname = entry.file_name();
+        let fname_str = fname.to_string_lossy();
+        if linked_payload.is_some() && fname_str == crate::linked::LINK_SIDECAR {
+            continue;
+        }
+        if let Some((_, payload_name)) = linked_payload
+            && fname_str == *payload_name
+        {
+            continue;
+        }
+        let child = format!("{name}{fname_str}");
         if path.is_dir() {
-            count += add_dir(zip, base, &path, &format!("{child}/"))?;
+            count += add_dir(zip, base, &path, &format!("{child}/"), None)?;
             continue;
         }
         let meta = fs::metadata(&path)?;
@@ -517,6 +559,20 @@ fn add_dir<W: Write + io::Seek>(zip: &mut ZipWriter<W>, base: SimpleFileOptions,
             .large_file(meta.len() >= u32::MAX as u64);
         zip.start_file(child, opts)?;
         io::copy(&mut File::open(&path)?, zip)?;
+        count += 1;
+    }
+    if let Some((src_path, payload_name)) = linked_payload {
+        let meta = fs::metadata(src_path)?;
+        if !meta.is_file() {
+            return Err(io::Error::new(io::ErrorKind::NotFound, format!("missing linked source {}", src_path.display())));
+        }
+        let child = format!("{name}{payload_name}");
+        let opts = base
+            .last_modified_time(zip_time(meta.modified()?))
+            .unix_permissions(mode(&meta, 0o644))
+            .large_file(meta.len() >= u32::MAX as u64);
+        zip.start_file(child, opts)?;
+        io::copy(&mut File::open(src_path)?, zip)?;
         count += 1;
     }
     Ok(count)
@@ -786,7 +842,7 @@ mod tests {
             let b = s.lib.item(old_id).unwrap();
             assert_ne!(a.id, b.id);
             assert_eq!((&a.name, &a.ext, a.size, a.width, a.height, &a.tags), (&b.name, &b.ext, b.size, b.width, b.height, &b.tags));
-            assert_eq!(fs::read(a.original_path(reopened.root())).unwrap(), fs::read(b.original_path(s.lib.root())).unwrap());
+            assert_eq!(fs::read(a.managed_storage_path(reopened.root())).unwrap(), fs::read(b.managed_storage_path(s.lib.root())).unwrap());
             assert_eq!(a.thumbnail_path(reopened.root()).is_some(), b.thumbnail_path(s.lib.root()).is_some());
         }
         assert_eq!(reopened.item(&new[0]).unwrap().folders, vec![tree.id.clone()]);

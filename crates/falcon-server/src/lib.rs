@@ -1027,10 +1027,11 @@ fn folder_reply(lib: &Library, id: &str) -> Reply {
 /// `/api/item/thumbnail`: the original when there is no thumbnail, else the
 /// thumbnail, URL-encoded the way Eagle does.
 fn thumbnail_path(lib: &Library, item: &Item) -> String {
-    let path = match item.thumbnail_path(lib.root()) {
-        Some(t) => t,
-        None => item.original_path(lib.root()),
-    };
+    let path = item
+        .thumbnail_path(lib.root())
+        .or_else(|| lib.resolved_source_path(&item.id).ok())
+        .or_else(|| lib.last_known_source_path(&item.id))
+        .unwrap_or_else(|| item.managed_storage_path(lib.root()));
     path.display().to_string().replace(' ', "%20").replace('#', "%23")
 }
 
@@ -1044,7 +1045,7 @@ fn thumbnail_path(lib: &Library, item: &Item) -> String {
 /// With `auto_tags`, the auto-tags of the target folders come first, then
 /// the given tags, as Eagle's URL imports do (its path imports add none).
 fn add_path(lib: &Shared, path: PathBuf, item: &Map<String, Value>, outer: &Map<String, Value>, auto_tags: bool) -> Result<String, String> {
-    let (folders, tags) = {
+    let (folders, tags, root, mode) = {
         let lib = lock(lib);
         let mut folders = folder_ids(&lib, item);
         if folders.is_empty() {
@@ -1052,7 +1053,7 @@ fn add_path(lib: &Shared, path: PathBuf, item: &Map<String, Value>, outer: &Map<
         }
         let mut tags = if auto_tags { falcon_library::autotag::auto_tags_for(&lib.metadata.folders, &folders) } else { Vec::new() };
         falcon_library::autotag::append_new(&mut tags, &strings(item, "tags"));
-        (folders, tags)
+        (folders, tags, lib.root().to_path_buf(), lib.storage_mode())
     };
     let opts = ImportOptions {
         folders,
@@ -1062,7 +1063,7 @@ fn add_path(lib: &Shared, path: PathBuf, item: &Map<String, Value>, outer: &Map<
         url: s(item, "website").unwrap_or("").to_string(),
         ..Default::default()
     };
-    let staged = falcon_library::import::stage(&path, &opts).map_err(|e| e.to_string())?;
+    let staged = falcon_library::import::stage_for(&path, &opts, Some(&root), mode).map_err(|e| e.to_string())?;
     let mut lib = lock(lib);
     let id = lib.commit_import(staged).map_err(|e| e.to_string())?;
     let mut changed = lib.item(&id).cloned().ok_or("import failed")?;

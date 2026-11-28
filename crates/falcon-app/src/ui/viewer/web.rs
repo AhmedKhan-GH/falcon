@@ -28,7 +28,7 @@ impl App {
         if !is_web(&item.ext) {
             return false;
         }
-        let file = item.original_path(lib.root());
+        let file = lib.resolved_source_path(&item.id).unwrap_or_else(|_| item.managed_storage_path(lib.root()));
         let Some(mut page) = page_for(&item.ext, &item.url, &file) else { return false };
         // An archive loads from its unpacked folder once that is ready; the
         // address it was saved from stands in for the folder's.
@@ -129,7 +129,7 @@ impl App {
     /// The still page: the QuickLook render of the file, fitted, with a
     /// line saying why the page isn't live.
     fn web_still(&mut self, ui: &mut Ui, lib: &Library, item: &Item, page: &Page, area: Rect, unreadable: bool) {
-        if let Some(j) = job_for(item, lib.root(), Tier::Full) {
+        if let Some(j) = job_for(lib, item, Tier::Full) {
             self.ws.frame_jobs.insert(0, j);
         }
         let note = match page {

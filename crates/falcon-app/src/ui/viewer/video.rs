@@ -342,7 +342,11 @@ impl VideoState {
             return true;
         }
         self.close();
-        let mut v = match Video::open_with(&item.original_path(lib.root()), mixer) {
+        let Ok(original) = lib.resolved_source_path(&item.id) else {
+            self.failed.insert(item.id.clone());
+            return false;
+        };
+        let mut v = match Video::open_with(&original, mixer) {
             Ok(v) => v,
             Err(_) => {
                 self.failed.insert(item.id.clone());
@@ -367,9 +371,14 @@ impl VideoState {
         }
         self.id = item.id.clone();
         self.player = Some(v);
-        // Eagle shows the first of `<name>.vtt` and `<name>.srt` it finds.
-        let original = item.original_path(lib.root());
-        self.subs = crate::subtitles::sidecars(&original).iter().find_map(|p| crate::subtitles::load(p)).unwrap_or_default();
+        // Eagle shows the first of `<name>.vtt` and `<name>.srt` it finds;
+        // also check `<id>.info/` so loaded subtitles for linked assets never touch source folders.
+        let cached = item.managed_storage_path(lib.root());
+        self.subs = crate::subtitles::sidecars(&original)
+            .into_iter()
+            .chain(crate::subtitles::sidecars(&cached))
+            .find_map(|p| crate::subtitles::load(&p))
+            .unwrap_or_default();
         true
     }
 }
@@ -601,7 +610,7 @@ impl App {
             }
             None => crate::ui::widgets::ext_placeholder(ui, thumb, &item.ext),
         }
-        if let Some(j) = crate::loader::job_for(item, lib.root(), crate::loader::Tier::Preview) {
+        if let Some(j) = crate::loader::job_for(lib, item, crate::loader::Tier::Preview) {
             self.ws.frame_jobs.push(j);
         }
         let name = format!("{}.{}", item.name, item.ext);
@@ -684,7 +693,8 @@ impl App {
             return;
         };
         let ext = src.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
-        let dest = item.original_path(lib.root()).with_extension(&ext);
+        // Always write subtitle cache inside `.info/`, never into external linked source folders.
+        let dest = item.managed_storage_path(lib.root()).with_extension(&ext);
         if src != dest
             && let Err(e) = std::fs::copy(&src, &dest)
         {
@@ -903,9 +913,9 @@ impl App {
         // above it, with the time, as Eagle's seek bar does.
         if let Some(px) = pointer.filter(|_| (hot && near.is_none()) || seek.dragged())
             && duration > 0.0
+            && let Ok(path) = lib.resolved_source_path(&item.id)
         {
             let at = logic::seek_time(px.x, left, width, duration);
-            let path = item.original_path(lib.root());
             let preview = vs.preview.get_or_insert_with(|| SeekPreview::start(ctx, path));
             let frame = if info.fps > 0.0 { 1.0 / f64::from(info.fps) } else { 0.04 };
             preview.ask(at, (duration / 400.0).max(frame));
