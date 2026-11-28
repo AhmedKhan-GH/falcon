@@ -27,14 +27,21 @@ struct CardDims {
     thumb_h: f32,
 }
 
-/// Width of the column of secondary Quick Access cards beside the Hero. It fills the row
-/// on ordinary windows but stops growing on very wide ones, where cards hundreds of
-/// pixels wide would hold only a name and a count.
-fn quick_secondary_width(content_w: f32, hero_w: f32, secondary: usize) -> f32 {
-    let room = (content_w - hero_w - 16.0).max(100.0);
-    let cap = if secondary <= 2 { 520.0 } else { 760.0 };
-    room.min(cap)
+/// The Hero's width and the width left for the secondary cards beside it (wide layout).
+fn quick_widths(content_w: f32) -> (f32, f32) {
+    let hero_w = ((content_w - 16.0) * 0.50).clamp(320.0, 480.0);
+    (hero_w, (content_w - hero_w - 16.0).max(100.0))
 }
+
+/// Columns and capacity of the secondary Quick Access grid beside the Hero: as many
+/// columns of cards at least [`QUICK_MIN_W`] wide as fit, in two rows. More cards than
+/// the capacity get a "View all" button; fewer or equal never do.
+fn quick_grid(sec_w: f32) -> (usize, usize) {
+    let cols = (((sec_w + 10.0) / (QUICK_MIN_W + 10.0)).floor() as usize).max(1);
+    (cols, cols * 2)
+}
+
+const QUICK_MIN_W: f32 = 240.0;
 
 /// An asset may be a Home cover when it is a live, previewable item outside
 /// locked folders; anything else (deleted, missing) falls back gracefully.
@@ -556,12 +563,26 @@ impl App {
             return;
         }
 
+        // On a wide window the secondary cards form a grid that shows as many as fit;
+        // "View all" appears only when some do not.
+        let sec_n = cards.len() - 1;
+        let wide = sec_n > 2 && content_w >= 720.0;
+        let capacity = if wide { quick_grid(quick_widths(content_w).1).1 } else { usize::MAX };
+        let overflow = wide && sec_n > capacity;
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(ic::STAR).font(font(15.0)).color(t::p().primary));
             ui.add_space(3.0);
             ui.label(egui::RichText::new(tr("Quick Access")).font(font(16.0)).strong().color(t::p().text));
             ui.add_space(4.0);
             ui.label(egui::RichText::new(format!("({})", cards.len())).font(font(13.0)).color(t::p().text_muted));
+            if overflow {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let label = if self.ws.home_quick_all { tr("Show less").to_string() } else { format!("{} →", tr("View All")) };
+                    if ui.add(egui::Button::new(egui::RichText::new(label).font(font(12.5)).color(t::p().primary)).frame(false)).clicked() {
+                        self.ws.home_quick_all = !self.ws.home_quick_all;
+                    }
+                });
+            }
         });
         ui.add_space(12.0);
 
@@ -577,8 +598,7 @@ impl App {
             }
         } else if content_w >= 720.0 {
             // Wide layout: Left primary Hero, Right supporting secondary cards
-            let hero_w = ((content_w - 16.0) * 0.50).clamp(320.0, 480.0);
-            let sec_w = quick_secondary_width(content_w, hero_w, secondary.len());
+            let (hero_w, sec_w) = quick_widths(content_w);
             let hero_h = 150.0;
 
             ui.horizontal(|ui| {
@@ -604,11 +624,13 @@ impl App {
                             }
                         }
                     } else {
-                        // 2x2 grid for up to 4 items
-                        let card_w = (sec_w - 10.0) / 2.0;
+                        // A grid of two rows that stretches to the width: as many columns as fit.
+                        let (cols_fit, cap) = quick_grid(sec_w);
+                        let shown = &secondary[..secondary.len().min(cap)];
+                        let cols = cols_fit.min(shown.len().div_ceil(2)).max(1);
+                        let card_w = (sec_w - (cols - 1) as f32 * 10.0) / cols as f32;
                         let card_h = (hero_h - 10.0) / 2.0;
-                        let shown = &secondary[..secondary.len().min(4)];
-                        for (r_idx, chunk) in shown.chunks(2).enumerate() {
+                        for (r_idx, chunk) in shown.chunks(cols).enumerate() {
                             if r_idx > 0 {
                                 ui.add_space(10.0);
                             }
@@ -624,6 +646,24 @@ impl App {
                     }
                 });
             });
+            // "View all": the cards that did not fit, below, across the full width.
+            if overflow && self.ws.home_quick_all {
+                ui.add_space(10.0);
+                let rest = &secondary[capacity..];
+                let cols = (((content_w + 10.0) / (QUICK_MIN_W + 10.0)).floor() as usize).max(1);
+                let card_w = (content_w - (cols - 1) as f32 * 10.0) / cols as f32;
+                for chunk in rest.chunks(cols) {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 10.0;
+                        for sec in chunk {
+                            if let Some(target) = self.render_secondary_card(ui, lib, sec, vec2(card_w, 68.0), manual) {
+                                clicked_scope = Some(target);
+                            }
+                        }
+                    });
+                    ui.add_space(10.0);
+                }
+            }
         } else {
             // Narrow layout (< 720px): Stack primary Hero, then secondary cards below
             let hero_h = 140.0;
@@ -1376,12 +1416,18 @@ mod tests {
     }
 
     #[test]
-    fn secondary_quick_access_cards_stop_growing_on_wide_windows() {
-        // Ordinary window: fills the row beside the Hero.
-        assert_eq!(quick_secondary_width(900.0, 400.0, 3), 900.0 - 400.0 - 16.0);
-        // 2000 px wide: capped, so cards stay readable.
-        assert_eq!(quick_secondary_width(1900.0, 480.0, 4), 760.0);
-        assert_eq!(quick_secondary_width(1900.0, 480.0, 2), 520.0);
-        assert!(quick_secondary_width(300.0, 480.0, 4) >= 100.0);
+    fn quick_access_grid_shows_as_many_cards_as_fit_and_view_all_only_on_overflow() {
+        // The grid has two rows; columns follow the room beside the Hero.
+        for (content_w, expect_cols) in [(900.0_f32, 1usize), (1000.0, 2), (1400.0, 3), (1900.0, 5)] {
+            let (_, sec_w) = quick_widths(content_w);
+            let (cols, cap) = quick_grid(sec_w);
+            assert_eq!((cols, cap), (expect_cols, expect_cols * 2), "content {content_w}");
+        }
+        // Six Quick Access entries (five secondary) on a window that fits seven or more: nothing overflows.
+        let (_, sec_w) = quick_widths(1900.0);
+        assert!(5 <= quick_grid(sec_w).1, "no View all");
+        // Twelve entries (eleven secondary) on a laptop width: the rest wait behind View all.
+        let (_, sec_w) = quick_widths(1000.0);
+        assert!(11 > quick_grid(sec_w).1, "View all");
     }
 }

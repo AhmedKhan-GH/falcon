@@ -471,6 +471,8 @@ pub(crate) struct Workspace {
     pub(crate) home_recent_imports: Vec<String>,
     /// Session cache of smart-folder Quick Access results (count, cover asset id) for Home.
     pub(crate) home_smart: std::collections::HashMap<String, (usize, Option<String>)>,
+    /// Home's Quick Access shows the cards that did not fit ("View all"); not saved.
+    pub(crate) home_quick_all: bool,
     /// Mutation counter incremented on user edits, organizing actions, imports, and undos.
     pub(crate) mutation_count: u64,
     /// Cache epoch: (root, modification_time, items_count, sort, increase, mutation_count, recent_limit) to invalidate home caches.
@@ -534,6 +536,7 @@ impl Workspace {
             home_mosaics: std::collections::HashMap::new(),
             home_recent_imports: Vec::new(),
             home_smart: std::collections::HashMap::new(),
+            home_quick_all: false,
             mutation_count: 0,
             home_cache_epoch: (root.clone().unwrap_or_default(), 0, 0, OrderBy::Import, true, 0, 20),
             lib,
