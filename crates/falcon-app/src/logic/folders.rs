@@ -480,4 +480,21 @@ mod clean_name_tests {
         assert_eq!(clean_folder_name("a / b"), "a   b", "slashes go after the spaces are squeezed");
         assert_eq!(clean_folder_name(" / "), "");
     }
+
+    /// Timing of the per-library counts the sidebar and Home need, on a library the size of the Owner's
+    /// (37,500 items, about 2,200 folders). Run by hand: `cargo test -p falcon-app --release bench_counts -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "timing only"]
+    fn bench_counts_on_a_production_sized_library() {
+        use crate::logic::test_util::{folder, item};
+        let roots: Vec<Folder> = (0..100).map(|r| folder(&format!("R{r}"), (0..21).map(|c| folder(&format!("R{r}C{c}"), vec![])).collect())).collect();
+        let items: Vec<_> = (0..37_500u64).map(|i| item(&format!("I{i}"), &format!("n{i}"), &[&format!("R{}C{}", i % 100, i % 21), &format!("R{}", (i * 7) % 100)], &["a", "b"], false, i, 1, 1)).collect();
+        let t = std::time::Instant::now();
+        let c = folder_total_counts(&items, &roots, &HashSet::new());
+        let a = t.elapsed();
+        let t = std::time::Instant::now();
+        let n = crate::logic::nav_counts(&items, &roots, 1);
+        let b = t.elapsed();
+        println!("folder_total_counts: {a:?} ({} folders), nav_counts: {b:?} ({} all)", c.len(), n.all);
+    }
 }

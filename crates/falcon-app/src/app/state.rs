@@ -23,6 +23,34 @@ pub(crate) const TILE_MAX: f32 = 400.0;
 
 /// What falcon remembers between launches, as Eagle does: the open
 /// libraries, zoom, sort and panel layout.
+/// What a cached count was computed from: it is recomputed when this changes,
+/// and at least every few seconds in case something changed it unseen.
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct CountsKey {
+    pub(crate) items: usize,
+    pub(crate) mutations: u64,
+    pub(crate) modified: u64,
+    pub(crate) flag: usize,
+}
+
+pub(crate) struct CountsCache<T> {
+    pub(crate) key: CountsKey,
+    pub(crate) at: std::time::Instant,
+    pub(crate) value: T,
+}
+
+impl<T: Clone> CountsCache<T> {
+    /// The cached value if it is still current for `key`.
+    pub(crate) fn current(cache: &std::sync::Mutex<Option<CountsCache<T>>>, key: &CountsKey) -> Option<T> {
+        let g = cache.lock().unwrap_or_else(|p| p.into_inner());
+        g.as_ref().filter(|c| c.key == *key && c.at.elapsed() < std::time::Duration::from_secs(10)).map(|c| c.value.clone())
+    }
+
+    pub(crate) fn store(cache: &std::sync::Mutex<Option<CountsCache<T>>>, key: CountsKey, value: T) {
+        *cache.lock().unwrap_or_else(|p| p.into_inner()) = Some(CountsCache { key, at: std::time::Instant::now(), value });
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 #[serde(default)]
 pub(crate) struct Saved {
@@ -471,6 +499,10 @@ pub(crate) struct Workspace {
     pub(crate) home_recent_imports: Vec<String>,
     /// Session cache of smart-folder Quick Access results (count, cover asset id) for Home.
     pub(crate) home_smart: std::collections::HashMap<String, (usize, Option<String>)>,
+    /// Folder item counts and sidebar counts, computed once per change of the
+    /// library instead of every frame (each walks every item).
+    pub(crate) counts_cache: std::sync::Mutex<Option<CountsCache<std::collections::HashMap<String, usize>>>>,
+    pub(crate) nav_cache: std::sync::Mutex<Option<CountsCache<logic::NavCounts>>>,
     /// Mutation counter incremented on user edits, organizing actions, imports, and undos.
     pub(crate) mutation_count: u64,
     /// Cache epoch: (root, modification_time, items_count, sort, increase, mutation_count, recent_limit) to invalidate home caches.
@@ -534,6 +566,8 @@ impl Workspace {
             home_mosaics: std::collections::HashMap::new(),
             home_recent_imports: Vec::new(),
             home_smart: std::collections::HashMap::new(),
+            counts_cache: std::sync::Mutex::new(None),
+            nav_cache: std::sync::Mutex::new(None),
             mutation_count: 0,
             home_cache_epoch: (root.clone().unwrap_or_default(), 0, 0, OrderBy::Import, true, 0, 20),
             lib,

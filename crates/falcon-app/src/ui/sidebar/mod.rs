@@ -458,7 +458,7 @@ impl App {
 
         let list_rect = Rect::from_min_max(Pos2::new(full.left(), lib_row.bottom() + 6.0), Pos2::new(full.right() - 1.0, filter_rect.top() - 8.0));
         let folder_counts = self.folder_counts_for(lib);
-        let nav = logic::nav_counts(lib.items(), &lib.metadata.folders, lib.metadata.modification_time);
+        let nav = self.nav_counts_for(lib);
         let quick: HashSet<String> =
             lib.metadata.quick_access.iter().filter_map(|q| q.get("id").and_then(|v| v.as_str()).map(String::from)).collect();
         let cx = SidebarCtx { folder_counts: &folder_counts, nav: &nav, quick: &quick };
@@ -602,12 +602,36 @@ impl App {
 
     /// Item counts per folder id for the sidebar and subfolder cards.
     pub(crate) fn folder_counts_for(&self, lib: &Library) -> HashMap<String, usize> {
-        if self.prefs.subfolder_counts {
+        use crate::app::state::{CountsCache, CountsKey};
+        let key = CountsKey {
+            items: lib.items().len(),
+            mutations: self.ws.mutation_count,
+            modified: lib.metadata.modification_time,
+            flag: usize::from(self.prefs.subfolder_counts) + 2 * self.ws.org.unlocked.len(),
+        };
+        if let Some(v) = CountsCache::current(&self.ws.counts_cache, &key) {
+            return v;
+        }
+        let out = if self.prefs.subfolder_counts {
             let hidden = crate::organize::hidden_folders(&lib.metadata.folders, &self.ws.org.unlocked);
             logic::folder_total_counts(lib.items(), &lib.metadata.folders, &hidden)
         } else {
             logic::folder_counts(lib.items())
+        };
+        CountsCache::store(&self.ws.counts_cache, key, out.clone());
+        out
+    }
+
+    /// The fixed sidebar counts, cached like [`App::folder_counts_for`].
+    pub(crate) fn nav_counts_for(&self, lib: &Library) -> logic::NavCounts {
+        use crate::app::state::{CountsCache, CountsKey};
+        let key = CountsKey { items: lib.items().len(), mutations: self.ws.mutation_count, modified: lib.metadata.modification_time, flag: 0 };
+        if let Some(v) = CountsCache::current(&self.ws.nav_cache, &key) {
+            return v;
         }
+        let out = logic::nav_counts(lib.items(), &lib.metadata.folders, lib.metadata.modification_time);
+        CountsCache::store(&self.ws.nav_cache, key, out.clone());
+        out
     }
 
     pub(crate) fn nav_rows(&mut self, ui: &mut Ui, cx: &SidebarCtx) {

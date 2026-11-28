@@ -90,6 +90,32 @@ pub(crate) fn classify_asset(lib: &Library, id: &str) -> UiAvailability {
     if !lib.is_linked_item(id) {
         return UiAvailability::Managed;
     }
+    // Checking a linked source touches the disk (an external or network volume
+    // can take long), and cards ask every frame, so the answer is kept for a few seconds.
+    thread_local! {
+        static SEEN: std::cell::RefCell<std::collections::HashMap<(std::path::PathBuf, String), (std::time::Instant, UiAvailability)>> = Default::default();
+    }
+    if cfg!(test) {
+        return classify_linked_now(lib, id);
+    }
+    let key = (lib.root().to_path_buf(), id.to_string());
+    // A reachable source is rechecked rarely; a problem is rechecked sooner so a reconnected drive shows up.
+    let fresh = |at: &std::time::Instant, v: &UiAvailability| at.elapsed() < std::time::Duration::from_secs(if *v == UiAvailability::Linked { 30 } else { 5 });
+    if let Some(v) = SEEN.with(|s| s.borrow().get(&key).filter(|(at, v)| fresh(at, v)).map(|(_, v)| *v)) {
+        return v;
+    }
+    let v = classify_linked_now(lib, id);
+    SEEN.with(|s| {
+        let mut s = s.borrow_mut();
+        if s.len() > 20_000 {
+            s.clear();
+        }
+        s.insert(key, (std::time::Instant::now(), v));
+    });
+    v
+}
+
+fn classify_linked_now(lib: &Library, id: &str) -> UiAvailability {
     match lib.ai_source_condition(id) {
         AiSourceCondition::Available(_) => UiAvailability::Linked,
         AiSourceCondition::Offline => UiAvailability::Offline,
