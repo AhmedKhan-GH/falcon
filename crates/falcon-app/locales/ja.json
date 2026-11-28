@@ -1383,6 +1383,8 @@
   "Offline (Volume Disconnected)": "オフライン（ボリューム未接続）",
   "Offline — Volume or drive is not connected (showing cached preview)": "オフライン — ボリュームまたはドライブが接続されていません（キャッシュ済みプレビューを表示中）",
   "Old password": "古いパスワード",
+  "Older extension API on port {port} not started: {error}": "旧版の拡張機能 API をポート {port} で開始できません：{error}",
+  "Older extension API on port {port}: listening.": "旧版の拡張機能 API がポート {port} で待ち受け中です。",
   "Oldest First": "古い順",
   "One Tag per Row": "1行に1つのタグ",
   "Only images can be exported in another format": "別の形式で書き出せるのは画像のみです",

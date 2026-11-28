@@ -1513,6 +1513,8 @@
   "Offline (Volume Disconnected)": "Не в сети (том отключён)",
   "Offline — Volume or drive is not connected (showing cached preview)": "Не в сети — том или диск отключён (показано кэшированное превью)",
   "Old password": "Старый пароль",
+  "Older extension API on port {port} not started: {error}": "Старый API расширения не запущен на порту {port}: {error}",
+  "Older extension API on port {port}: listening.": "Старый API расширения слушает порт {port}.",
   "Oldest First": "Сначала старые",
   "One Tag per Row": "Один тег в строке",
   "Only images can be exported in another format": "В другом формате можно экспортировать только изображения",

@@ -375,6 +375,7 @@ pub enum SessionCmd {
 /// What the Developer pane shows and asks about browser integration.
 pub struct BrowserUi<'a> {
     pub compat: &'a CompatStatus,
+    pub legacy: Option<&'a str>,
     pub blocked: Option<&'a str>,
     pub recent: &'a [String],
     /// Seconds left in the browser import session, if one is running.
@@ -985,6 +986,8 @@ pub struct Window {
     /// The Eagle-compatibility listener's state, and the last browser
     /// extension origin the API refused, for the Developer pane.
     pub compat_status: CompatStatus,
+    /// The older-API listener's state, shown under the status.
+    pub compat_note: Option<String>,
     pub blocked_origin: Option<String>,
     /// The API's latest requests, newest first, as text lines (diagnostics).
     pub recent_requests: Vec<String>,
@@ -1289,7 +1292,7 @@ impl Window {
             Section::AiModels => self.ai.ui(p, &mut d.prefs.ai_models),
             Section::Mcp => mcp::pane(p, d, &mut self.mcp_port_text, self.mcp_status),
             Section::Developer => {
-                let ui = BrowserUi { compat: &self.compat_status, blocked: self.blocked_origin.as_deref(), recent: &self.recent_requests, session: self.session_remaining, cmd: &mut self.session_cmd };
+                let ui = BrowserUi { compat: &self.compat_status, legacy: self.compat_note.as_deref(), blocked: self.blocked_origin.as_deref(), recent: &self.recent_requests, session: self.session_remaining, cmd: &mut self.session_cmd };
                 developer(p, d, &mut self.port_text, port_error, ui)
             }
         }
@@ -1972,7 +1975,7 @@ pub fn new_token() -> String {
 }
 
 fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<&String>, b: BrowserUi) {
-    let BrowserUi { compat, blocked, recent, session, cmd } = b;
+    let BrowserUi { compat, legacy, blocked, recent, session, cmd } = b;
     let pr = &mut d.prefs;
     let first = parse_port(port_text).unwrap_or(pr.api_port);
     p.block(tr_key("API token"), &["api", "token", "key", "auth", "developer", "restful"], |ui| {
@@ -2023,6 +2026,9 @@ fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<
             CompatStatus::Conflict(m) | CompatStatus::Failed(m) => {
                 ui.label(RichText::new(trf("Not started: {error}", &[("error", m)])).size(11.0).color(t::p().icon_red));
             }
+        }
+        if let Some(n) = legacy {
+            note(ui, n);
         }
         ui.add_space(6.0);
         ui.label(RichText::new(tr("Approved browser extensions")).size(12.0));

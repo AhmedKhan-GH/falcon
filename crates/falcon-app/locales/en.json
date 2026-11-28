@@ -1448,6 +1448,8 @@
   "Offline (Volume Disconnected)": "Offline (Volume Disconnected)",
   "Offline — Volume or drive is not connected (showing cached preview)": "Offline — Volume or drive is not connected (showing cached preview)",
   "Old password": "Old password",
+  "Older extension API on port {port} not started: {error}": "Older extension API on port {port} not started: {error}",
+  "Older extension API on port {port}: listening.": "Older extension API on port {port}: listening.",
   "Oldest First": "Oldest First",
   "One Tag per Row": "One Tag per Row",
   "Only images can be exported in another format": "Only images can be exported in another format",

@@ -1383,6 +1383,8 @@
   "Offline (Volume Disconnected)": "離線（磁碟區未連線）",
   "Offline — Volume or drive is not connected (showing cached preview)": "離線 — 磁碟區或磁碟機未連線（顯示快取預覽）",
   "Old password": "舊密碼",
+  "Older extension API on port {port} not started: {error}": "舊版擴充功能 API 未在連接埠 {port} 上啟動：{error}",
+  "Older extension API on port {port}: listening.": "舊版擴充功能 API 正在連接埠 {port} 上監聽。",
   "Oldest First": "最舊優先",
   "One Tag per Row": "每行一個標籤",
   "Only images can be exported in another format": "只有圖片可以匯出為其他格式",

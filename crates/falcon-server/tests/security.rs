@@ -552,3 +552,104 @@ fn browser_requests_are_rate_limited_and_batches_bounded() {
     assert_eq!(r.code, 403);
     assert!(e.server.pending_imports().is_empty());
 }
+
+fn form_post(port: u16, headers: &[(&str, &str)], fields: &[(&str, &str)]) -> Reply {
+    let enc = |s: &str| s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect::<String>();
+    let body = fields.iter().map(|(k, v)| format!("{}={}", enc(k), enc(v))).collect::<Vec<_>>().join("&");
+    let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
+    let mut req = format!("POST / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n");
+    for (k, v) in headers {
+        req.push_str(&format!("{k}: {v}\r\n"));
+    }
+    req.push_str(&format!("Content-Type: application/x-www-form-urlencoded;charset=UTF-8\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}", body.len()));
+    s.write_all(req.as_bytes()).unwrap();
+    let mut out = Vec::new();
+    let _ = s.read_to_end(&mut out);
+    let text = String::from_utf8_lossy(&out).into_owned();
+    let (head, body) = text.split_once("\r\n\r\n").unwrap_or((&text, ""));
+    Reply { code: head.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0), head: head.to_lowercase(), body: body.to_string() }
+}
+
+#[test]
+fn legacy_extension_api_saves_only_through_an_approved_session_with_confirmation() {
+    let _g = TEMP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let e = env();
+    let port = free_port();
+    let _l = e.server.start_legacy(port, || {}).unwrap();
+    // Discovery for the older client: minimal, no data.
+    let r = raw(port, "GET", "/", &web("https://evil.example"), None);
+    assert_eq!(r.code, 200);
+    assert_eq!(r.json()["showCollectModal"], false);
+    assert!(!r.body.contains("Sec.library"));
+    assert_eq!(raw(port, "GET", "/api/library/info", &[], None).code, 404, "only the older API's two calls exist there");
+
+    let ext = "safari-web-extension://59f6ae21-9544-490d-9862-6e582c28be11";
+    let src = png_data_url();
+    let fields = [("src", src.as_str()), ("title", "../../Pin title"), ("url", "https://id.pinterest.com/pin/1/"), ("folderID", e.open.as_str()), ("type", "image"), ("version", "3.1.19")];
+    let h = [("Origin", ext), ("Sec-Fetch-Site", "cross-site"), ("Sec-Fetch-Mode", "no-cors"), ("Sec-Fetch-Dest", "empty")];
+
+    // No session, an unknown extension, or a page without the extension's origin: refused; nothing imported.
+    assert_eq!(form_post(port, &h, &fields).code, 403);
+    assert_eq!(e.server.blocked_origin().as_deref(), Some(ext), "offered to the user for this session");
+    assert_eq!(form_post(port, &opaque(), &fields).code, 403, "no Origin: not the extension");
+    assert_eq!(form_post(port, &web("https://id.pinterest.com"), &fields).code, 403);
+    e.server.start_session(600);
+    assert_eq!(form_post(port, &h, &fields).code, 403, "a session alone doesn't approve an origin");
+    assert_eq!(e.items(), 0);
+
+    assert!(e.server.approve_session_origin(ext));
+    // Declined, then confirmed.
+    let mut codes = Vec::new();
+    for accept in [false, true] {
+        let (src2, open, hh) = (src.clone(), e.open.clone(), h);
+        let t = std::thread::spawn(move || {
+            let fields = [("src", src2.as_str()), ("title", "../../Pin title"), ("url", "https://id.pinterest.com/pin/1/"), ("folderID", open.as_str()), ("type", "image")];
+            form_post(port, &hh, &fields).code
+        });
+        let p = loop {
+            if let Some(p) = e.server.pending_imports().first() {
+                break p.clone();
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        };
+        assert_eq!((p.count, p.folder.as_str()), (1, "Open"));
+        assert_eq!(e.items(), 0, "nothing is imported while it waits");
+        e.server.resolve_import(p.id, accept);
+        codes.push(t.join().unwrap());
+    }
+    assert_eq!(codes, [403, 200]);
+    let lib = e.lib.lock().unwrap();
+    assert_eq!(lib.items().len(), 1);
+    let item = &lib.items()[0];
+    assert_eq!(item.name, "Pin title", "the title is display text only, sanitized");
+    assert_eq!(item.url, "https://id.pinterest.com/pin/1/", "the source page is kept");
+    assert_eq!(item.folders, [e.open.clone()]);
+    drop(lib);
+
+    // A source that points inside the machine is still refused by the safe download, after confirmation.
+    let (open, hh) = (e.open.clone(), h);
+    let t = std::thread::spawn(move || form_post(port, &hh, &[("src", "http://127.0.0.1:1/a.png"), ("folderID", open.as_str())]).code);
+    let p = loop {
+        if let Some(p) = e.server.pending_imports().first() {
+            break p.clone();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    e.server.resolve_import(p.id, true);
+    assert_eq!(t.join().unwrap(), 500);
+    assert_eq!(e.items(), 1);
+    // Stopping the session ends it.
+    e.server.stop_session();
+    assert_eq!(form_post(port, &h, &fields).code, 403);
+}
+
+#[test]
+fn legacy_listener_follows_the_same_port_rules() {
+    let e = env();
+    let port = free_port();
+    let l = e.server.start_legacy(port, || {}).unwrap();
+    assert!(matches!(e.server.start_legacy(port, || {}), Err(falcon_server::CompatError::InUse(_))));
+    drop(l);
+    assert!(TcpStream::connect(("127.0.0.1", port)).is_err());
+    assert_eq!(falcon_server::LEGACY_PORT, 41593);
+}

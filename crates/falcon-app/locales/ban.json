@@ -1383,6 +1383,8 @@
   "Offline (Volume Disconnected)": "Offline (Volume Pegat)",
   "Offline — Volume or drive is not connected (showing cached preview)": "Offline — Volume utawi drive nenten masambung (nyinahang pratinjau cache)",
   "Old password": "Kruna sandi lami",
+  "Older extension API on port {port} not started: {error}": "API ekstensi lawas nenten kawitin ring port {port}: {error}",
+  "Older extension API on port {port}: listening.": "API ekstensi lawas ngerungu ring port {port}.",
   "Oldest First": "Pinih Lami Dumun",
   "One Tag per Row": "Asiki Tag per Baris",
   "Only images can be exported in another format": "Wantah gambar sane prasida kaekspor ring format siosan",

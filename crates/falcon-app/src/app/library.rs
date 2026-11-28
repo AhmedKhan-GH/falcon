@@ -287,6 +287,7 @@ impl App {
     /// started) Eagle must keep reaching Eagle.
     pub(crate) fn start_server(&mut self) {
         self.compat = None;
+        self.compat_legacy = None;
         self.server = None;
         self.api_check.cancel();
         self.clear_api_warning();
@@ -315,6 +316,8 @@ impl App {
     /// program's listener, and a conflict leaves compatibility off.
     pub(crate) fn sync_compat(&mut self) {
         self.compat = None;
+        self.compat_legacy = None;
+        self.prefs_window.compat_note = None;
         self.compat_status = if !self.prefs.eagle_compat {
             // Compatibility off also ends any browser import session.
             if let Some(h) = &self.server {
@@ -327,6 +330,15 @@ impl App {
                 Ok(l) => {
                     let port = l.port;
                     self.compat = Some(l);
+                    // The extension saves through its older API on its own port.
+                    let ctx = self.ctx.clone();
+                    self.prefs_window.compat_note = Some(match h.start_legacy(falcon_server::LEGACY_PORT, move || ctx.request_repaint()) {
+                        Ok(l2) => {
+                            self.compat_legacy = Some(l2);
+                            trf("Older extension API on port {port}: listening.", &[("port", &falcon_server::LEGACY_PORT)])
+                        }
+                        Err(e) => trf("Older extension API on port {port} not started: {error}", &[("port", &falcon_server::LEGACY_PORT), ("error", &e.to_string())]),
+                    });
                     crate::prefs::CompatStatus::Listening(port)
                 }
                 Err(falcon_server::CompatError::InUse(m)) => crate::prefs::CompatStatus::Conflict(m),

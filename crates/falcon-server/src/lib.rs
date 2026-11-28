@@ -44,6 +44,8 @@ use tiny_http::{Header, Method, Request, Response, Server};
 /// Eagle's default port; falcon defaults to the next one so both can run.
 pub const EAGLE_PORT: u16 = 41595;
 pub const DEFAULT_PORT: u16 = 41596;
+/// The port the Eagle browser extension's older API (and its save requests) uses.
+pub const LEGACY_PORT: u16 = 41593;
 
 /// The version reported to clients, which check it against Eagle's.
 const API_VERSION: &str = "4.0.0";
@@ -262,7 +264,7 @@ pub fn serve(lib: Shared, port: u16) -> std::io::Result<()> {
     let server = Server::http(("127.0.0.1", port)).map_err(std::io::Error::other)?;
     let state = State::new(&lib);
     for request in server.incoming_requests() {
-        handle(&lib, &state, port, request);
+        handle(&lib, &state, port, false, request);
     }
     Ok(())
 }
@@ -404,6 +406,19 @@ impl Handle {
     /// any other program) is never displaced or shadowed. Dropping the
     /// returned listener closes it.
     pub fn start_compat(&self, port: u16, on_request: impl Fn() + Send + 'static) -> Result<CompatListener, CompatError> {
+        self.listen_extra(port, false, on_request)
+    }
+
+    /// Like [`Handle::start_compat`], for the older Eagle extension API on
+    /// its own port: `GET /` says whether the app is there and `POST /` saves
+    /// one image (a form with `src`, `title`, `url`, `folderID`…), which is
+    /// handled exactly like an import from a browser session (an approved
+    /// extension origin, a confirmation in the app, the safe download).
+    pub fn start_legacy(&self, port: u16, on_request: impl Fn() + Send + 'static) -> Result<CompatListener, CompatError> {
+        self.listen_extra(port, true, on_request)
+    }
+
+    fn listen_extra(&self, port: u16, legacy: bool, on_request: impl Fn() + Send + 'static) -> Result<CompatListener, CompatError> {
         if port == self.port {
             return Err(CompatError::InUse(format!("port {port} is the API's own port")));
         }
@@ -418,7 +433,7 @@ impl Handle {
         let thread = std::thread::spawn(move || {
             for request in s.incoming_requests() {
                 let lib = slot.lock().unwrap_or_else(|p| p.into_inner()).clone();
-                handle(&lib, &state, port, request);
+                handle(&lib, &state, port, legacy, request);
                 on_request();
             }
         });
@@ -508,7 +523,7 @@ pub fn start(
                 let thread = std::thread::spawn(move || {
                     for request in s.incoming_requests() {
                         let lib = sl.lock().unwrap_or_else(|p| p.into_inner()).clone();
-                        handle(&lib, &st, port, request);
+                        handle(&lib, &st, port, false, request);
                         on_request();
                     }
                 });
@@ -541,6 +556,8 @@ enum Reply {
     Page(&'static str),
     /// A refusal with its own status (403 policy, 413 size).
     Status(u16, &'static str),
+    /// A JSON body as is, without Eagle's envelope (the older API's discovery).
+    Raw(Value),
 }
 
 /// The largest request body read (data URLs for imports are the big ones).
@@ -550,7 +567,7 @@ fn header(req: &Request, name: &'static str) -> Option<String> {
     req.headers().iter().find(|h| h.field.equiv(name)).map(|h| h.value.as_str().to_string())
 }
 
-fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
+fn handle(lib: &Shared, state: &State, port: u16, legacy: bool, mut req: Request) {
     let url = req.url().to_string();
     let (path, query) = url.split_once('?').unwrap_or((&url, ""));
     let path = path.trim_end_matches('/').to_string();
@@ -604,6 +621,7 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
         return state.record(row);
     }
 
+    let form = legacy && header(&req, "Content-Type").is_some_and(|c| c.to_ascii_lowercase().starts_with("application/x-www-form-urlencoded"));
     if matches!(method, Method::Post | Method::Put) {
         let mut body = String::new();
         let n = req.as_reader().take(MAX_BODY + 1).read_to_string(&mut body);
@@ -612,7 +630,9 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
             row.why = "body too large".into();
             return state.record(row);
         }
-        if !body.trim().is_empty() {
+        if form {
+            args.extend(parse_query(&body));
+        } else if !body.trim().is_empty() {
             match serde_json::from_str::<Value>(&body) {
                 Ok(Value::Object(m)) => args.extend(m),
                 _ => {
@@ -644,7 +664,12 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
 
     // Then the origin policy (BEC-1B): a web page gets discovery only, a
     // browser extension only what the user approved, never filesystem paths.
-    let tier = policy::tier(matches!(method, Method::Post | Method::Put), &path, &args);
+    let post = matches!(method, Method::Post | Method::Put);
+    let tier = if legacy && path == "/" {
+        if post { policy::Tier::Import } else { policy::Tier::Discovery }
+    } else {
+        policy::tier(post, &path, &args)
+    };
     let (session_on, session_origins) = state.session_snapshot(&root_of(lib));
     let session = policy::SessionView { active: session_on, origins: Some(&session_origins) };
     let mut verdict = policy::decide(tier, &kind, &approved, token_ok, &path, &session);
@@ -688,6 +713,9 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
             why = "session read";
             session_reply(lib, state, &path)
         }
+        "/" if legacy && method == Method::Get => Reply::Raw(json!({"status": "success", "showCollectModal": false})),
+        "/" if legacy && method == Method::Post => legacy_save(lib, &args, &state.unlocked_in(&root_of(lib))),
+        _ if legacy => Reply::NotFound,
         "/" | "/api/application/info" | "/api/v2/app/info" if method == Method::Get => discovery(state, &path, verdict == policy::Verdict::Allow),
         "/item" | "/folder" | "/smart-folder" => link_redirect(&lock(lib), &path, s(&args, "id")),
         "/api/v2/playground" => Reply::Page(PLAYGROUND),
@@ -746,6 +774,27 @@ fn session_reply(lib: &Shared, state: &State, path: &str) -> Reply {
     }
 }
 
+/// The older extension API's save: one image by URL (`src`), with the page
+/// it came from (`url`), its title and an optional folder. Everything goes
+/// through [`add_url`], so the safe download and the locked-folder rule apply.
+fn legacy_save(lib: &Shared, args: &Map<String, Value>, unlocked: &HashSet<String>) -> Reply {
+    let Some(src) = s(args, "src") else { return Reply::Fail("Missing required parameters.".into()) };
+    let mut item = Map::new();
+    if let Some(t) = s(args, "title") {
+        item.insert("name".into(), json!(t));
+    }
+    if let Some(page) = s(args, "url").filter(|u| (u.starts_with("https://") || u.starts_with("http://")) && u.len() <= 1000) {
+        item.insert("website".into(), json!(page));
+    }
+    if let Some(f) = s(args, "folderID") {
+        item.insert("folderId".into(), json!(f));
+    }
+    match add_url(lib, src, &item, &Map::new(), unlocked) {
+        Ok(_) => Reply::Empty,
+        Err(e) => Reply::Fail(e),
+    }
+}
+
 /// Holds an import from a browser until the user decides in the app.
 /// Nothing is downloaded or committed before that. No decision within
 /// [`CONFIRM_WAIT`] counts as no.
@@ -759,7 +808,7 @@ fn confirm_import(lib: &Shared, state: &State, site: &str, path: &str, args: &Ma
     }
     let mut hosts: Vec<String> = Vec::new();
     for e in &items {
-        let host = match (s(e, "url"), e.get("base64")) {
+        let host = match (s(e, "src").or_else(|| s(e, "url")), e.get("base64")) {
             (Some(u), _) if u.starts_with("data:") => "(embedded image)".to_string(),
             (Some(u), _) => u.split("://").nth(1).and_then(|r| r.split(['/', '?', '#']).next()).unwrap_or("?").chars().take(80).collect(),
             (None, Some(_)) => "(embedded image)".to_string(),
@@ -942,6 +991,7 @@ fn send(req: Request, reply: Reply, cors: Option<String>) -> u16 {
         Reply::NotFound => (404, json!({"status": "error", "code": 404, "message": "method not allowed"})),
         Reply::WrongMethod => (405, json!({"status": "error", "code": 405, "message": "method not allowed"})),
         Reply::Status(code, msg) => (code, json!({"status": "error", "code": code, "message": msg})),
+        Reply::Raw(v) => (200, v),
         Reply::Unauthorized => (
             401,
             json!({"status": "error", "code": 401, "message": "Unauthorized: Access is denied due to invalid token."}),

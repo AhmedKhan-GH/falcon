@@ -53,6 +53,8 @@ pub struct App {
     /// The optional listener on Eagle's port (Preferences ▸ Developer), and its state.
     pub(crate) compat: Option<falcon_server::CompatListener>,
     pub(crate) compat_status: crate::prefs::CompatStatus,
+    /// The listener for the extension's older API, and a note on its state.
+    pub(crate) compat_legacy: Option<falcon_server::CompatListener>,
     /// The browser import last asked about, so the dock is nudged once per import.
     pub(crate) import_attention: Option<u64>,
     pub(crate) mcp: mcp::McpState,
@@ -252,6 +254,7 @@ impl App {
             server: None,
             compat: None,
             compat_status: Default::default(),
+            compat_legacy: None,
             import_attention: None,
             mcp: Default::default(),
             ai: ai_search::AiSearch::start(&cc.egui_ctx),

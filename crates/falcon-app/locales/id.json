@@ -1383,6 +1383,8 @@
   "Offline (Volume Disconnected)": "Offline (Volume Terputus)",
   "Offline — Volume or drive is not connected (showing cached preview)": "Offline — Volume atau drive tidak terhubung (menampilkan pratinjau cache)",
   "Old password": "Kata sandi lama",
+  "Older extension API on port {port} not started: {error}": "API ekstensi lama tidak dimulai di port {port}: {error}",
+  "Older extension API on port {port}: listening.": "API ekstensi lama mendengarkan di port {port}.",
   "Oldest First": "Terlama Lebih Dulu",
   "One Tag per Row": "Satu Tag per Baris",
   "Only images can be exported in another format": "Hanya gambar yang dapat diekspor dalam format lain",

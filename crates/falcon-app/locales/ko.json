@@ -1383,6 +1383,8 @@
   "Offline (Volume Disconnected)": "오프라인 (볼륨 연결 해제됨)",
   "Offline — Volume or drive is not connected (showing cached preview)": "오프라인 — 볼륨 또는 드라이브가 연결되어 있지 않습니다 (캐시된 미리보기 표시 중)",
   "Old password": "이전 비밀번호",
+  "Older extension API on port {port} not started: {error}": "이전 확장 프로그램 API를 포트 {port}에서 시작하지 못했습니다: {error}",
+  "Older extension API on port {port}: listening.": "이전 확장 프로그램 API가 포트 {port}에서 대기 중입니다.",
   "Oldest First": "오래된순",
   "One Tag per Row": "한 줄에 태그 하나",
   "Only images can be exported in another format": "이미지만 다른 형식으로 내보낼 수 있습니다",
