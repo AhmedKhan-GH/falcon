@@ -13,6 +13,8 @@ use serde_json::{Value, json};
 
 /// Serializes the tests that count temp directories.
 static TEMP_LOCK: Mutex<()> = Mutex::new(());
+/// Serializes the tests that pick a free port, so two never pick the same one.
+static PORT_LOCK: Mutex<()> = Mutex::new(());
 
 const EXT: &str = "chrome-extension://abcdefghijklmnop";
 
@@ -342,6 +344,7 @@ fn free_port() -> u16 {
 
 #[test]
 fn compatibility_listener_is_off_by_default_and_follows_its_handle() {
+    let _p = PORT_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let e = env();
     // `start` never opens Eagle's port by itself.
     assert!(e.port() != falcon_server::EAGLE_PORT);
@@ -572,6 +575,7 @@ fn form_post(port: u16, headers: &[(&str, &str)], fields: &[(&str, &str)]) -> Re
 
 #[test]
 fn legacy_extension_api_saves_only_through_an_approved_session_with_confirmation() {
+    let _p = PORT_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let _g = TEMP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let e = env();
     let port = free_port();
@@ -644,6 +648,7 @@ fn legacy_extension_api_saves_only_through_an_approved_session_with_confirmation
 
 #[test]
 fn legacy_listener_follows_the_same_port_rules() {
+    let _p = PORT_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let e = env();
     let port = free_port();
     let l = e.server.start_legacy(port, || {}).unwrap();
