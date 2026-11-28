@@ -20,17 +20,20 @@
 
 mod ai;
 pub mod mcp;
+pub mod policy;
 mod rules;
+pub mod safe_fetch;
 mod v2;
 
 pub use ai::{AiQuery, AiSearch, AiStatus};
+pub use policy::normalize_origin;
 
 use std::collections::{HashMap, HashSet};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use base64::Engine;
 use falcon_library::import::ImportOptions;
 use falcon_library::model::{Folder, Item};
 use falcon_library::search::{self, Query};
@@ -60,6 +63,10 @@ struct State {
     unlocked: Mutex<HashSet<(String, String)>>,
     /// What answers `aiSearch/*`; see [`Handle::set_ai_search`].
     ai: Mutex<Option<Arc<dyn AiSearch>>>,
+    /// Browser extension origins the user approved ([`Handle::set_approved_origins`]).
+    approved_origins: Mutex<HashSet<String>>,
+    /// The last extension origin refused for not being approved, so the app can offer it for approval.
+    blocked_origin: Mutex<Option<String>>,
 }
 
 impl State {
@@ -71,7 +78,14 @@ impl State {
             preferences_changed: AtomicBool::new(false),
             unlocked: Mutex::new(HashSet::new()),
             ai: Mutex::new(None),
+            approved_origins: Mutex::new(HashSet::new()),
+            blocked_origin: Mutex::new(None),
         }
+    }
+
+    fn token_valid(&self, given: Option<&str>) -> bool {
+        let token = self.token.lock().unwrap_or_else(|p| p.into_inner());
+        !token.trim().is_empty() && given == Some(token.as_str())
     }
 
     fn history(&self) -> Vec<String> {
@@ -175,11 +189,90 @@ impl Handle {
         *self.state.ai.lock().unwrap_or_else(|p| p.into_inner()) = Some(ai);
     }
 
+    /// Sets the browser extension origins that may use the API (normalized
+    /// `chrome-extension://…`, `moz-extension://…`, `safari-web-extension://…`
+    /// origins; anything else is ignored).
+    pub fn set_approved_origins(&self, origins: &[String]) {
+        let set = origins.iter().filter_map(|o| policy::normalize_origin(o)).collect();
+        *self.state.approved_origins.lock().unwrap_or_else(|p| p.into_inner()) = set;
+    }
+
+    /// The last browser extension origin that was refused because it is not
+    /// approved, for the app to offer in Preferences.
+    pub fn blocked_origin(&self) -> Option<String> {
+        self.state.blocked_origin.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    /// Forgets the blocked origin (after it was approved or dismissed).
+    pub fn clear_blocked_origin(&self) {
+        *self.state.blocked_origin.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    }
+
+    /// Starts a second listener, on `port`, for clients that only look at
+    /// Eagle's port. It shares this server's library, rules and approvals
+    /// (it is the same API, not another one) and is refused when anything
+    /// already answers on that port, on IPv4 or IPv6, so a running Eagle (or
+    /// any other program) is never displaced or shadowed. Dropping the
+    /// returned listener closes it.
+    pub fn start_compat(&self, port: u16, on_request: impl Fn() + Send + 'static) -> Result<CompatListener, CompatError> {
+        if port == self.port {
+            return Err(CompatError::InUse(format!("port {port} is the API's own port")));
+        }
+        let timeout = std::time::Duration::from_millis(200);
+        for addr in [std::net::SocketAddr::from(([127, 0, 0, 1], port)), std::net::SocketAddr::from((std::net::Ipv6Addr::LOCALHOST, port))] {
+            if std::net::TcpStream::connect_timeout(&addr, timeout).is_ok() {
+                return Err(CompatError::InUse(format!("another program is already listening on port {port}")));
+            }
+        }
+        let server = Arc::new(Server::http(("127.0.0.1", port)).map_err(|e| CompatError::Failed(e.to_string()))?);
+        let (s, slot, state) = (server.clone(), self.slot.clone(), self.state.clone());
+        let thread = std::thread::spawn(move || {
+            for request in s.incoming_requests() {
+                let lib = slot.lock().unwrap_or_else(|p| p.into_inner()).clone();
+                handle(&lib, &state, port, request);
+                on_request();
+            }
+        });
+        Ok(CompatListener { server, thread: Some(thread), port })
+    }
+
     /// The preferences, if a request changed them since the last call or
     /// [`Handle::set_preferences`] (`preferences/collect/on` and `off` set
     /// `general.showCollectModal`).
     pub fn take_preferences(&self) -> Option<Value> {
         self.state.preferences_changed.swap(false, Ordering::SeqCst).then(|| self.state.preferences())
+    }
+}
+
+/// A second listener for Eagle's port (see [`Handle::start_compat`]).
+pub struct CompatListener {
+    server: Arc<Server>,
+    thread: Option<std::thread::JoinHandle<()>>,
+    pub port: u16,
+}
+
+impl Drop for CompatListener {
+    fn drop(&mut self) {
+        self.server.unblock();
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
+/// Why the compatibility listener did not start.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CompatError {
+    /// Something else already answers on the port; nothing was changed.
+    InUse(String),
+    Failed(String),
+}
+
+impl std::fmt::Display for CompatError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CompatError::InUse(m) | CompatError::Failed(m) => f.write_str(m),
+        }
     }
 }
 
@@ -257,6 +350,15 @@ enum Reply {
     Missing(&'static str),
     /// An HTML page.
     Page(&'static str),
+    /// A refusal with its own status (403 policy, 413 size).
+    Status(u16, &'static str),
+}
+
+/// The largest request body read (data URLs for imports are the big ones).
+const MAX_BODY: u64 = 48 * 1024 * 1024;
+
+fn header(req: &Request, name: &'static str) -> Option<String> {
+    req.headers().iter().find(|h| h.field.equiv(name)).map(|h| h.value.as_str().to_string())
 }
 
 fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
@@ -266,36 +368,137 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
     let path = if path.is_empty() { "/".to_string() } else { path };
     let mut args = parse_query(query);
     let method = req.method().clone();
+    let (host, origin, site) = (header(&req, "Host"), header(&req, "Origin"), header(&req, "Sec-Fetch-Site"));
+    let host_ok = host.as_deref().is_some_and(|h| policy::host_allowed(h, port));
+    let kind = policy::kind(origin.as_deref(), site.as_deref(), port);
+    let approved = state.approved_origins.lock().unwrap_or_else(|p| p.into_inner()).clone();
+
+    // CORS preflight: answered only for a caller that could then be served.
+    if method == Method::Options {
+        let tier = policy::tier(false, &path, &Map::new());
+        let ok = host_ok
+            && match &kind {
+                policy::Kind::Extension(o) => approved.contains(o) || tier == policy::Tier::Discovery,
+                policy::Kind::SameOrigin => true,
+                _ => tier == policy::Tier::Discovery,
+            };
+        return preflight(req, ok, origin.as_deref(), tier == policy::Tier::Discovery);
+    }
+
     if matches!(method, Method::Post | Method::Put) {
         let mut body = String::new();
-        let _ = req.as_reader().read_to_string(&mut body);
+        let n = req.as_reader().take(MAX_BODY + 1).read_to_string(&mut body);
+        if n.is_err() || body.len() as u64 > MAX_BODY {
+            return send(req, Reply::Status(413, "Request too large."), None);
+        }
         if !body.trim().is_empty() {
             match serde_json::from_str::<Value>(&body) {
                 Ok(Value::Object(m)) => args.extend(m),
-                _ => return send(req, Reply::BadRequest),
+                _ => return send(req, Reply::BadRequest, None),
             }
         }
     }
 
     // Eagle serves a request whose Host is its own address, or one that
     // carries the Developer token (a POST may also put it in the query).
-    let host = req.headers().iter().find(|h| h.field.equiv("Host")).map(|h| h.value.as_str().to_string());
-    let allowed_hosts = [format!("localhost:{port}"), format!("127.0.0.1:{port}"), format!("0.0.0.0:{port}")];
-    let host_ok = host.as_ref().is_some_and(|h| allowed_hosts.contains(h));
     let token = match args.get("token") {
         Some(Value::String(t)) => Some(t.clone()),
         _ => parse_query(query).get("token").and_then(Value::as_str).map(String::from),
     };
     if !state.allows(host_ok, token.as_deref()) {
-        return send(req, Reply::Unauthorized);
+        return send(req, Reply::Unauthorized, None);
+    }
+    let token_ok = state.token_valid(token.as_deref());
+
+    // Then the origin policy (BEC-1B): a web page gets discovery only, a
+    // browser extension only what the user approved, never filesystem paths.
+    let tier = policy::tier(matches!(method, Method::Post | Method::Put), &path, &args);
+    let mut verdict = policy::decide(tier, &kind, &approved, token_ok);
+    if verdict == policy::Verdict::Allow
+        && !token_ok
+        && policy::is_switch(&path)
+        && matches!(kind, policy::Kind::Extension(_))
+        && !s(&args, "libraryPath").is_some_and(|p| state.history().iter().any(|h| h == p))
+    {
+        verdict = policy::Verdict::Forbidden("Only a library from the recent libraries list can be opened from a browser extension.");
+    }
+    let cors = policy::cors_origin(tier, &kind, &verdict, origin.as_deref());
+    if let policy::Verdict::Forbidden(why) = verdict {
+        if let policy::Kind::Extension(o) = &kind
+            && tier != policy::Tier::Discovery
+        {
+            *state.blocked_origin.lock().unwrap_or_else(|p| p.into_inner()) = Some(o.clone());
+        }
+        return send(req, Reply::Status(403, why), cors);
     }
 
     let reply = match path.as_str() {
+        "/" | "/api/application/info" | "/api/v2/app/info" if method == Method::Get => discovery(state, &path, verdict == policy::Verdict::Allow),
         "/item" | "/folder" | "/smart-folder" => link_redirect(&lock(lib), &path, s(&args, "id")),
         "/api/v2/playground" => Reply::Page(PLAYGROUND),
         _ => route(lib, state, &method, &path, &args),
     };
-    send(req, reply);
+    send(req, reply, cors);
+}
+
+fn preflight(req: Request, ok: bool, origin: Option<&str>, discovery: bool) {
+    if !ok {
+        let _ = req.respond(Response::empty(403));
+        return;
+    }
+    let allow = if discovery { "*".to_string() } else { origin.unwrap_or("").to_string() };
+    let h = |k: &str, v: &str| Header::from_bytes(k, v).unwrap();
+    let methods = if discovery { "GET, OPTIONS" } else { "GET, POST, OPTIONS" };
+    let _ = req.respond(
+        Response::empty(204)
+            .with_header(h("Access-Control-Allow-Origin", &allow))
+            .with_header(h("Access-Control-Allow-Methods", methods))
+            .with_header(h("Access-Control-Allow-Headers", "Content-Type"))
+            .with_header(h("Access-Control-Max-Age", "600"))
+            .with_header(h("Vary", "Origin")),
+    );
+}
+
+/// The discovery answer. A caller that is not otherwise authorized (a web
+/// page) gets only what a client needs to see that the app is there; the
+/// rest never includes the Developer token or filesystem paths.
+fn discovery(state: &State, path: &str, full: bool) -> Reply {
+    let prefs = state.preferences();
+    let show = prefs["general"]["showCollectModal"].as_str().unwrap_or("false").to_string();
+    let preferences = if full {
+        let mut p = prefs;
+        if let Some(o) = p.as_object_mut() {
+            o.remove("developer");
+        }
+        if let Some(o) = p.get_mut("autoImport").and_then(Value::as_object_mut) {
+            o.remove("path");
+        }
+        p
+    } else {
+        json!({"general": {"showCollectModal": show}})
+    };
+    let identity = json!({"application": "Falcon", "falconVersion": env!("CARGO_PKG_VERSION")});
+    let mut data = if path == "/api/v2/app/info" {
+        json!({
+            "version": API_VERSION,
+            "prereleaseVersion": null,
+            "buildVersion": concat!("falcon-", env!("CARGO_PKG_VERSION")),
+            "platform": std::env::consts::OS,
+        })
+    } else {
+        json!({
+            "version": API_VERSION,
+            "prereleaseVersion": null,
+            "buildVersion": concat!("falcon-", env!("CARGO_PKG_VERSION")),
+            "showCollectModal": show == "true",
+            "platform": std::env::consts::OS,
+            "preferences": preferences,
+        })
+    };
+    if let (Some(d), Some(i)) = (data.as_object_mut(), identity.as_object()) {
+        d.extend(i.clone());
+    }
+    Reply::Data(data)
 }
 
 /// `/item?id=`, `/folder?id=` and `/smart-folder?id=`: a redirect to the
@@ -350,7 +553,7 @@ fn decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-fn send(req: Request, reply: Reply) {
+fn send(req: Request, reply: Reply, cors: Option<String>) {
     let (code, body) = match reply {
         Reply::Redirect(to) => {
             let resp = match Header::from_bytes("Location", to.as_bytes()) {
@@ -379,15 +582,20 @@ fn send(req: Request, reply: Reply) {
         Reply::BadRequest => (400, json!({"status": "error", "code": 400, "message": "Bad Request"})),
         Reply::NotFound => (404, json!({"status": "error", "code": 404, "message": "method not allowed"})),
         Reply::WrongMethod => (405, json!({"status": "error", "code": 405, "message": "method not allowed"})),
+        Reply::Status(code, msg) => (code, json!({"status": "error", "code": code, "message": msg})),
         Reply::Unauthorized => (
             401,
             json!({"status": "error", "code": 401, "message": "Unauthorized: Access is denied due to invalid token."}),
         ),
     };
-    let resp = Response::from_string(body.to_string())
+    let mut resp = Response::from_string(body.to_string())
         .with_status_code(code)
-        .with_header(Header::from_bytes("Content-Type", "application/json; charset=utf-8").unwrap())
-        .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap());
+        .with_header(Header::from_bytes("Content-Type", "application/json; charset=utf-8").unwrap());
+    if let Some(origin) = cors
+        && let Ok(h) = Header::from_bytes("Access-Control-Allow-Origin", origin.as_bytes())
+    {
+        resp = resp.with_header(h).with_header(Header::from_bytes("Vary", "Origin").unwrap());
+    }
     let _ = req.respond(resp);
 }
 
@@ -583,7 +791,7 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
     if path.starts_with("/api/v2/aiSearch/") {
         return ai::route(lib, state, path, args);
     }
-    if let Some(reply) = import_route(lib, path, args) {
+    if let Some(reply) = import_route(lib, state, path, args) {
         return reply;
     }
     if let Some(reply) = unlocked_route(lib, state, path, args) {
@@ -593,23 +801,8 @@ fn route(lib: &Shared, state: &State, method: &Method, path: &str, args: &Map<St
     let lib = &mut *lib;
 
     match path {
-        "/" | "/api/application/info" => {
-            let preferences = state.preferences();
-            Reply::Data(json!({
-                "version": API_VERSION,
-                "prereleaseVersion": null,
-                "buildVersion": concat!("falcon-", env!("CARGO_PKG_VERSION")),
-                "showCollectModal": preferences["general"]["showCollectModal"] == "true",
-                "platform": std::env::consts::OS,
-                "preferences": preferences,
-            }))
-        }
-        "/api/v2/app/info" => Reply::Data(json!({
-            "version": API_VERSION,
-            "prereleaseVersion": null,
-            "buildVersion": concat!("falcon-", env!("CARGO_PKG_VERSION")),
-            "platform": std::env::consts::OS,
-        })),
+        // `/`, `application/info` and `v2/app/info` are answered by `discovery`.
+        "/" | "/api/application/info" | "/api/v2/app/info" => discovery(state, path, true),
         "/api/library/info" => Reply::Data(library_info(lib)),
         "/api/v2/library/info" => {
             // v2 puts `path` and `name` at the top level instead of under `library`.
@@ -826,11 +1019,12 @@ fn lock(lib: &Shared) -> MutexGuard<'_, Library> {
 
 /// The add routes. They lock the library only briefly (see [`add_path`]),
 /// so the app sharing it stays responsive while a source is read.
-fn import_route(lib: &Shared, path: &str, args: &Map<String, Value>) -> Option<Reply> {
+fn import_route(lib: &Shared, state: &State, path: &str, args: &Map<String, Value>) -> Option<Reply> {
+    let unlocked = state.unlocked_in(&root_of(lib));
     Some(match path {
         "/api/item/addFromPath" => {
             let Some(p) = s(args, "path") else { return Some(Reply::Fail("Missing required parameters.".into())) };
-            match add_path(lib, PathBuf::from(p), args, args, false) {
+            match add_path(lib, PathBuf::from(p), args, args, false, &unlocked) {
                 Ok(id) => Reply::Data(json!(id)),
                 Err(e) => Reply::Fail(e),
             }
@@ -852,7 +1046,7 @@ fn import_route(lib: &Shared, path: &str, args: &Map<String, Value>) -> Option<R
             let mut ids = Vec::new();
             for e in entries {
                 if let Some(p) = s(&e, "path")
-                    && let Ok(id) = add_path(lib, PathBuf::from(p), &e, args, false)
+                    && let Ok(id) = add_path(lib, PathBuf::from(p), &e, args, false, &unlocked)
                 {
                     ids.push(id);
                 }
@@ -861,7 +1055,7 @@ fn import_route(lib: &Shared, path: &str, args: &Map<String, Value>) -> Option<R
         }
         "/api/item/addFromURL" => {
             let Some(url) = s(args, "url") else { return Some(Reply::Fail("Missing required parameters.".into())) };
-            let added = add_url(lib, url, args, args);
+            let added = add_url(lib, url, args, args, &unlocked);
             record_tags(lib, args);
             match added {
                 Ok(_) => Reply::Empty,
@@ -872,13 +1066,13 @@ fn import_route(lib: &Shared, path: &str, args: &Map<String, Value>) -> Option<R
             let Some(Value::Array(items)) = args.get("items") else { return Some(Reply::Fail("Missing required parameters.".into())) };
             for e in items.iter().filter_map(Value::as_object) {
                 if let Some(url) = s(e, "url") {
-                    let _ = add_url(lib, url, e, args);
+                    let _ = add_url(lib, url, e, args, &unlocked);
                     record_tags(lib, e);
                 }
             }
             Reply::Empty
         }
-        "/api/v2/item/add" => v2::add_item(lib, args),
+        "/api/v2/item/add" => v2::add_item(lib, args, &unlocked),
         _ => return None,
     })
 }
@@ -1044,12 +1238,24 @@ fn thumbnail_path(lib: &Library, item: &Item) -> String {
 ///
 /// With `auto_tags`, the auto-tags of the target folders come first, then
 /// the given tags, as Eagle's URL imports do (its path imports add none).
-fn add_path(lib: &Shared, path: PathBuf, item: &Map<String, Value>, outer: &Map<String, Value>, auto_tags: bool) -> Result<String, String> {
-    let (folders, tags, root, mode) = {
+fn add_path(
+    lib: &Shared,
+    path: PathBuf,
+    item: &Map<String, Value>,
+    outer: &Map<String, Value>,
+    from_download: bool,
+    unlocked: &HashSet<String>,
+) -> Result<String, String> {
+    let auto_tags = from_download;
+    let (folders, tags, root, mut mode) = {
         let lib = lock(lib);
         let mut folders = folder_ids(&lib, item);
         if folders.is_empty() {
             folders = folder_ids(&lib, outer);
+        }
+        // A password-protected folder takes imports only once it was unlocked over the API this session.
+        if let Some(f) = lib.all_folders().into_iter().find(|f| folders.contains(&f.id) && f.is_locked() && !unlocked.contains(&f.id)) {
+            return Err(format!("The folder \"{}\" is password-protected.", f.name));
         }
         let mut tags = if auto_tags { falcon_library::autotag::auto_tags_for(&lib.metadata.folders, &folders) } else { Vec::new() };
         falcon_library::autotag::append_new(&mut tags, &strings(item, "tags"));
@@ -1063,6 +1269,10 @@ fn add_path(lib: &Shared, path: PathBuf, item: &Map<String, Value>, outer: &Map<
         url: s(item, "website").unwrap_or("").to_string(),
         ..Default::default()
     };
+    // A download lives in a temp directory that is removed afterwards, so it is always copied in, never linked.
+    if from_download {
+        mode = falcon_library::StorageMode::Copy;
+    }
     let staged = falcon_library::import::stage_for(&path, &opts, Some(&root), mode).map_err(|e| e.to_string())?;
     let mut lib = lock(lib);
     let id = lib.commit_import(staged).map_err(|e| e.to_string())?;
@@ -1086,33 +1296,29 @@ fn add_path(lib: &Shared, path: PathBuf, item: &Map<String, Value>, outer: &Map<
     Ok(id)
 }
 
-/// Downloads an http(s) or data URL to a temporary file and imports it,
-/// all without holding the library lock until the commit.
-fn add_url(lib: &Shared, url: &str, item: &Map<String, Value>, outer: &Map<String, Value>) -> Result<String, String> {
-    let (bytes, ext) = if let Some(rest) = url.strip_prefix("data:") {
-        let (meta, data) = rest.split_once(',').ok_or("Invalid data URL.")?;
-        let ext = meta.split(';').next().and_then(|m| m.split('/').nth(1)).unwrap_or("png");
-        let ext = if ext == "svg+xml" { "svg" } else if ext == "jpeg" { "jpg" } else { ext };
-        let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| e.to_string())?;
-        (bytes, ext.to_string())
-    } else if url.starts_with("http://") || url.starts_with("https://") {
-        let mut resp = ureq::get(url).call().map_err(|e| e.to_string())?;
-        let bytes = resp.body_mut().read_to_vec().map_err(|e| e.to_string())?;
-        let path = url.split(['?', '#']).next().unwrap_or(url);
-        let ext = path.rsplit('/').next().and_then(|f| f.rsplit_once('.')).map_or("jpg", |(_, e)| e).to_lowercase();
-        (bytes, ext)
-    } else {
-        return Err("Unsupported URL.".into());
-    };
-    let name = s(item, "name").map(String::from).unwrap_or_else(|| {
-        url.split(['?', '#']).next().and_then(|p| p.rsplit('/').next()).and_then(|f| f.rsplit_once('.')).map_or("image".into(), |(n, _)| n.to_string())
-    });
-    let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
-    let file = dir.path().join(format!("{name}.{ext}"));
-    std::fs::write(&file, bytes).map_err(|e| e.to_string())?;
+/// Fetches an http(s) or data URL through the safe pipeline
+/// ([`safe_fetch`]) into a private temp file and imports that with the
+/// normal import path. The temp file is gone when this returns.
+fn add_url(lib: &Shared, url: &str, item: &Map<String, Value>, outer: &Map<String, Value>, unlocked: &HashSet<String>) -> Result<String, String> {
+    // Refuse a protected destination before downloading anything.
+    {
+        let l = lock(lib);
+        let mut ids = folder_ids(&l, item);
+        if ids.is_empty() {
+            ids = folder_ids(&l, outer);
+        }
+        if let Some(f) = l.all_folders().into_iter().find(|f| ids.contains(&f.id) && f.is_locked() && !unlocked.contains(&f.id)) {
+            return Err(format!("The folder \"{}\" is password-protected.", f.name));
+        }
+    }
+    let policy = safe_fetch::FetchPolicy::default();
+    let fetched = if url.starts_with("data:") { safe_fetch::from_data_url(url, &policy)? } else { safe_fetch::fetch_url(url, &policy)? };
+    let derived = url.split(['?', '#']).next().and_then(|p| p.rsplit('/').next()).map(decode).and_then(|f| f.rsplit_once('.').map(|(n, _)| n.to_string())).unwrap_or_default();
+    let name = safe_fetch::sanitize_name(s(item, "name").unwrap_or(&derived), "image");
     let mut entry = item.clone();
+    entry.insert("name".into(), json!(name));
     entry.entry("website").or_insert_with(|| json!(if url.starts_with("data:") { "" } else { url }));
-    add_path(lib, file, &entry, outer, true)
+    add_path(lib, fetched.file.clone(), &entry, outer, true, unlocked)
 }
 
 /// `/api/item/list` with Eagle's quirks: `offset` is a page number, no limit

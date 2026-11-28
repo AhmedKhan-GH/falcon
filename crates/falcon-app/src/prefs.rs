@@ -57,6 +57,12 @@ pub struct Prefs {
     pub api_enabled: bool,
     /// The first port the API tries.
     pub api_port: u16,
+    /// Also listen on Eagle's port, so Eagle's browser extension can find
+    /// Falcon. Off by default, and never turned on for existing users.
+    pub eagle_compat: bool,
+    /// Browser extension origins (`chrome-extension://…`) allowed to use the
+    /// API. Empty by default: a browser extension is refused until approved.
+    pub approved_extension_origins: Vec<String>,
     /// Eagle's `developer.apiToken`: requests carrying it as `token` are
     /// served by the API whatever their `Host`. Empty by default, as in
     /// Eagle; only Generate/Regenerate in the Developer pane makes one.
@@ -357,6 +363,19 @@ impl RecentThumbSize {
     }
 }
 
+/// What the Eagle-compatibility listener is doing, for Preferences.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum CompatStatus {
+    #[default]
+    Off,
+    /// Asked for, but the local API is off or not running.
+    NeedsApi,
+    Listening(u16),
+    /// Something else answers on Eagle's port; nothing was started.
+    Conflict(String),
+    Failed(String),
+}
+
 /// Size of the Library Folders cards on Home.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[serde(rename_all = "lowercase")]
@@ -468,6 +487,8 @@ impl Default for Prefs {
             font_style_tags: true,
             api_enabled: true,
             api_port: falcon_server::DEFAULT_PORT,
+            eagle_compat: false,
+            approved_extension_origins: Vec::new(),
             api_token: String::new(),
             mcp_enabled: false,
             mcp_port: falcon_server::mcp::DEFAULT_PORT,
@@ -942,6 +963,10 @@ pub struct Window {
     mcp_port_text: String,
     /// What the MCP server is doing now, for its pane.
     pub mcp_status: mcp::Status,
+    /// The Eagle-compatibility listener's state, and the last browser
+    /// extension origin the API refused, for the Developer pane.
+    pub compat_status: CompatStatus,
+    pub blocked_origin: Option<String>,
     recorder: Recorder,
     password: PasswordForm,
     /// The theme and interface size last saved or applied; previewed
@@ -1239,7 +1264,7 @@ impl Window {
             Section::AiSearch => crate::ai_search::pane(p, d, self.ai_search.as_deref()),
             Section::AiModels => self.ai.ui(p, &mut d.prefs.ai_models),
             Section::Mcp => mcp::pane(p, d, &mut self.mcp_port_text, self.mcp_status),
-            Section::Developer => developer(p, d, &mut self.port_text, port_error),
+            Section::Developer => developer(p, d, &mut self.port_text, port_error, &self.compat_status, self.blocked_origin.as_deref()),
         }
     }
 
@@ -1919,7 +1944,7 @@ pub fn new_token() -> String {
     format!("{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32])
 }
 
-fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<&String>) {
+fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<&String>, compat: &CompatStatus, blocked: Option<&str>) {
     let pr = &mut d.prefs;
     let first = parse_port(port_text).unwrap_or(pr.api_port);
     p.block(tr_key("API token"), &["api", "token", "key", "auth", "developer", "restful"], |ui| {
@@ -1960,11 +1985,63 @@ fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<
             }
         });
     });
+    p.block(tr_key("Browser Integration"), &["browser", "extension", "eagle", "compatibility", "port", "41595", "pinterest", "origin"], |ui| {
+        ui.checkbox(&mut pr.eagle_compat, tr("Eagle Extension Compatibility"));
+        note(ui, tr("Also listens on Eagle's port so Eagle's browser extension can find falcon. Off by default. falcon never reports itself as Eagle, and it does not start if Eagle or another program already uses the port."));
+        match compat {
+            CompatStatus::Off => note(ui, tr("Compatibility is off.")),
+            CompatStatus::NeedsApi => note(ui, tr("Turn on the local API to use this.")),
+            CompatStatus::Listening(port) => note(ui, &trf("Listening on port {port}.", &[("port", port)])),
+            CompatStatus::Conflict(m) | CompatStatus::Failed(m) => {
+                ui.label(RichText::new(trf("Not started: {error}", &[("error", m)])).size(11.0).color(t::p().icon_red));
+            }
+        }
+        ui.add_space(6.0);
+        ui.label(RichText::new(tr("Approved browser extensions")).size(12.0));
+        note(ui, tr("Web pages can never use the API. A browser extension can only after you approve it here, and never to read files by path."));
+        let mut remove = None;
+        for (i, o) in pr.approved_extension_origins.iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.add(egui::Label::new(RichText::new(o).monospace().size(11.0)).selectable(true));
+                if ui.button(tr("Remove")).clicked() {
+                    remove = Some(i);
+                }
+            });
+        }
+        if let Some(i) = remove {
+            pr.approved_extension_origins.remove(i);
+        }
+        if let Some(o) = blocked.and_then(falcon_server::normalize_origin).filter(|o| !pr.approved_extension_origins.contains(o)) {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(trf("Refused a request from {origin}", &[("origin", &o)])).size(11.0));
+                if ui.button(tr("Allow")).clicked() {
+                    pr.approved_extension_origins.push(o);
+                }
+            });
+        }
+    });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn eagle_compatibility_is_off_by_default_and_never_enabled_for_existing_users() {
+        assert!(!Prefs::default().eagle_compat);
+        assert!(Prefs::default().approved_extension_origins.is_empty(), "no browser extension is approved by default");
+        // State saved before BEC-1 has neither key.
+        let old: Prefs = serde_json::from_str(r#"{"api_enabled": true, "api_port": 41596}"#).unwrap();
+        assert!(!old.eagle_compat && old.approved_extension_origins.is_empty());
+        let on = Prefs { eagle_compat: true, approved_extension_origins: vec!["chrome-extension://abc".into()], ..Prefs::default() };
+        let back: Prefs = serde_json::from_str(&serde_json::to_string(&on).unwrap()).unwrap();
+        assert!(back.eagle_compat);
+        assert_eq!(back.approved_extension_origins, ["chrome-extension://abc"]);
+        // The compatibility port is Eagle's, and the API's own range still never includes it.
+        assert_eq!(falcon_server::EAGLE_PORT, EAGLE_PORT);
+        assert!(!on.api_ports().unwrap().contains(&EAGLE_PORT));
+        assert_eq!(CompatStatus::default(), CompatStatus::Off);
+    }
 
     #[test]
     fn rotate_mode_loads_old_prefs() {

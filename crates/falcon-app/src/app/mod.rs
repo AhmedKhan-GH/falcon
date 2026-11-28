@@ -50,6 +50,9 @@ pub struct App {
     pub(crate) open_switcher: bool,
     /// The local HTTP API for the shown library, as Eagle runs it.
     pub(crate) server: Option<falcon_server::Handle>,
+    /// The optional listener on Eagle's port (Preferences ▸ Developer), and its state.
+    pub(crate) compat: Option<falcon_server::CompatListener>,
+    pub(crate) compat_status: crate::prefs::CompatStatus,
     pub(crate) mcp: mcp::McpState,
     /// AI Search's worker (`app/ai_search.rs`).
     pub(crate) ai: ai_search::AiSearch,
@@ -245,6 +248,8 @@ impl App {
             title: String::new(),
             open_switcher: false,
             server: None,
+            compat: None,
+            compat_status: Default::default(),
             mcp: Default::default(),
             ai: ai_search::AiSearch::start(&cc.egui_ctx),
             ctx: cc.egui_ctx.clone(),
@@ -632,6 +637,7 @@ impl App {
         self.force_close_dialog(&ctx);
         self.switch_warning_dialog(&ctx);
         self.poll_api_check();
+        self.poll_blocked_origin();
         self.alert_modal(&ctx);
         if self.ws.lib.is_some() {
             self.missing_modal(&ctx);

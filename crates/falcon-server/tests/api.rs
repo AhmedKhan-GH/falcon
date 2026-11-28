@@ -575,15 +575,20 @@ fn application_info_and_preferences() {
     let e = env();
     for path in ["/api/application/info", "/"] {
         let d = e.ok_get(path);
-        assert_eq!(keys(&d), ["version", "prereleaseVersion", "buildVersion", "showCollectModal", "platform", "preferences"], "{path}");
+        assert_eq!(keys(&d), ["version", "prereleaseVersion", "buildVersion", "showCollectModal", "platform", "preferences", "application", "falconVersion"], "{path}");
         assert_eq!(d["showCollectModal"], false);
-        assert_eq!(d["preferences"], json!({"general": {"showCollectModal": "false"}, "developer": {"apiToken": ""}}));
+        assert_eq!(d["application"], "Falcon");
+        // Discovery never reports the Developer token (BEC-1B), even an empty one.
+        assert_eq!(d["preferences"], json!({"general": {"showCollectModal": "false"}}));
     }
-    e.server.set_preferences(json!({"general": {"showCollectModal": "true", "x": "1"}}));
+    e.server.set_preferences(json!({"general": {"showCollectModal": "true", "x": "1"}, "developer": {"apiToken": "secret"}, "autoImport": {"enable": "true", "path": "/Users/me/Inbox"}}));
     let d = e.ok_get("/api/application/info");
     assert_eq!(d["showCollectModal"], true);
-    assert_eq!(d["preferences"], json!({"general": {"showCollectModal": "true", "x": "1"}}));
-    assert_eq!(keys(&e.ok_get("/api/v2/app/info")), ["version", "prereleaseVersion", "buildVersion", "platform"]);
+    assert_eq!(d["preferences"], json!({"general": {"showCollectModal": "true", "x": "1"}, "autoImport": {"enable": "true"}}));
+    assert!(!d.to_string().contains("secret") && !d.to_string().contains("/Users/me"));
+    assert_eq!(keys(&e.ok_get("/api/v2/app/info")), ["version", "prereleaseVersion", "buildVersion", "platform", "application", "falconVersion"]);
+    // The build field stays Falcon's own, never an Eagle build number.
+    assert!(e.ok_get("/")["buildVersion"].as_str().unwrap().starts_with("falcon-"));
 }
 
 #[test]

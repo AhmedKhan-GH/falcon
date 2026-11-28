@@ -286,6 +286,7 @@ impl App {
     /// Preferences. Never Eagle's own port: clients of a running (or later
     /// started) Eagle must keep reaching Eagle.
     pub(crate) fn start_server(&mut self) {
+        self.compat = None;
         self.server = None;
         self.api_check.cancel();
         self.clear_api_warning();
@@ -298,11 +299,45 @@ impl App {
                 self.api_check.start(h.port, move || ctx.request_repaint());
                 self.server = Some(h);
                 self.share_with_server();
+                self.sync_compat();
             }
             Err(e) => {
                 crate::errlog::error(&format!("API not started: {e}"));
+                self.sync_compat();
                 self.show_alert(Alert::new(crate::api_check::title(), crate::api_check::start_failed_message(&ports)));
             }
+        }
+    }
+
+    /// Starts or stops the listener on Eagle's port to match the preference
+    /// and records what happened. It is a second listener of the same API
+    /// (see `falcon_server::Handle::start_compat`); it never replaces another
+    /// program's listener, and a conflict leaves compatibility off.
+    pub(crate) fn sync_compat(&mut self) {
+        self.compat = None;
+        self.compat_status = if !self.prefs.eagle_compat {
+            crate::prefs::CompatStatus::Off
+        } else if let Some(h) = &self.server {
+            let ctx = self.ctx.clone();
+            match h.start_compat(falcon_server::EAGLE_PORT, move || ctx.request_repaint()) {
+                Ok(l) => {
+                    let port = l.port;
+                    self.compat = Some(l);
+                    crate::prefs::CompatStatus::Listening(port)
+                }
+                Err(falcon_server::CompatError::InUse(m)) => crate::prefs::CompatStatus::Conflict(m),
+                Err(falcon_server::CompatError::Failed(m)) => crate::prefs::CompatStatus::Failed(m),
+            }
+        } else {
+            crate::prefs::CompatStatus::NeedsApi
+        };
+        self.prefs_window.compat_status = self.compat_status.clone();
+    }
+
+    /// Hands Preferences the last browser extension origin the API refused.
+    pub(crate) fn poll_blocked_origin(&mut self) {
+        if self.prefs_window.open {
+            self.prefs_window.blocked_origin = self.server.as_ref().and_then(|h| h.blocked_origin());
         }
     }
 
@@ -328,6 +363,7 @@ impl App {
     pub(crate) fn share_with_server(&self) {
         let Some(h) = &self.server else { return };
         h.set_token(&self.prefs.api_token);
+        h.set_approved_origins(&self.prefs.approved_extension_origins);
         h.set_preferences(self.prefs.eagle_preferences());
         h.set_history(self.recent.iter().map(|p| p.display().to_string()).collect());
         if let Some(engine) = &self.ai.engine {
@@ -347,6 +383,8 @@ impl App {
         self.prefs_window.show_with(crate::prefs::Draft { prefs: self.prefs.clone(), panels, keys: self.shortcuts.clone(), launch_at_login: crate::login_item::status().is_on() });
         self.prefs_window.library = self.ws.root.clone();
         self.show_mcp_status();
+        self.prefs_window.compat_status = self.compat_status.clone();
+        self.prefs_window.blocked_origin = self.server.as_ref().and_then(|h| h.blocked_origin());
     }
 
     /// Whether menus and boxes are translucent: as being edited in
@@ -372,6 +410,7 @@ impl App {
     /// Takes the Preferences window's Save or Apply.
     pub(crate) fn apply_preferences(&mut self, d: crate::prefs::Draft) {
         let restart = self.prefs.api_changed(&d.prefs);
+        let compat_changed = self.prefs.eagle_compat != d.prefs.eagle_compat;
         // The collect folder is chosen in the collect window, which may
         // have changed it while Preferences was open.
         let folder = self.prefs.collect_folder.take();
@@ -403,6 +442,13 @@ impl App {
             if self.ws.lib.is_some() && !self.prefs.api_enabled {
                 self.flash(tr("API stopped"));
             }
+        } else if compat_changed {
+            self.sync_compat();
+        }
+        if let Some(h) = &self.server
+            && h.blocked_origin().is_some_and(|o| self.prefs.approved_extension_origins.contains(&o))
+        {
+            h.clear_blocked_origin();
         }
     }
 
