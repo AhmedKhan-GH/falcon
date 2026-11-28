@@ -338,6 +338,18 @@ fn oversized_bodies_are_refused() {
     assert_eq!(e.items(), 0);
 }
 
+/// Whether nothing listens on `port`. A few tries: while other tests make many loopback connections,
+/// a connect to a closed port can rarely "succeed" by connecting to itself from the same ephemeral port.
+fn port_is_closed(port: u16) -> bool {
+    (0..5).any(|_| {
+        let closed = TcpStream::connect(("127.0.0.1", port)).is_err();
+        if !closed {
+            std::thread::sleep(std::time::Duration::from_millis(30));
+        }
+        closed
+    })
+}
+
 fn free_port() -> u16 {
     TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
 }
@@ -349,7 +361,7 @@ fn compatibility_listener_is_off_by_default_and_follows_its_handle() {
     // `start` never opens Eagle's port by itself.
     assert!(e.port() != falcon_server::EAGLE_PORT);
     let port = free_port();
-    assert!(TcpStream::connect(("127.0.0.1", port)).is_err(), "nothing listens until it is started");
+    assert!(port_is_closed(port), "nothing listens until it is started");
 
     let listener = e.server.start_compat(port, || {}).unwrap();
     assert_eq!(listener.port, port);
@@ -369,7 +381,7 @@ fn compatibility_listener_is_off_by_default_and_follows_its_handle() {
     assert_eq!(raw(port, "GET", "/", &[], None).code, 200);
 
     drop(listener);
-    assert!(TcpStream::connect(("127.0.0.1", port)).is_err(), "disabling closes the listener");
+    assert!(port_is_closed(port), "disabling closes the listener");
     assert_eq!(e.send("GET", "/api/library/info", &[], None).code, 200, "the main API is unaffected");
 }
 
@@ -654,6 +666,6 @@ fn legacy_listener_follows_the_same_port_rules() {
     let l = e.server.start_legacy(port, || {}).unwrap();
     assert!(matches!(e.server.start_legacy(port, || {}), Err(falcon_server::CompatError::InUse(_))));
     drop(l);
-    assert!(TcpStream::connect(("127.0.0.1", port)).is_err());
+    assert!(port_is_closed(port));
     assert_eq!(falcon_server::LEGACY_PORT, 41593);
 }

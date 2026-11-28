@@ -437,7 +437,7 @@ impl Handle {
                 on_request();
             }
         });
-        Ok(CompatListener { server, thread: Some(thread), port })
+        Ok(CompatListener { server: Some(server), thread: Some(thread), port })
     }
 
     /// The preferences, if a request changed them since the last call or
@@ -450,16 +450,19 @@ impl Handle {
 
 /// A second listener for Eagle's port (see [`Handle::start_compat`]).
 pub struct CompatListener {
-    server: Arc<Server>,
+    server: Option<Arc<Server>>,
     thread: Option<std::thread::JoinHandle<()>>,
     pub port: u16,
 }
 
 impl Drop for CompatListener {
     fn drop(&mut self) {
-        self.server.unblock();
-        if let Some(t) = self.thread.take() {
-            let _ = t.join();
+        // Release the socket before returning, so the port is free once this is dropped.
+        if let Some(server) = self.server.take() {
+            server.unblock();
+            if let Some(t) = self.thread.take() {
+                let _ = t.join();
+            }
         }
     }
 }
