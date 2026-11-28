@@ -518,7 +518,7 @@ fn session_imports_wait_for_confirmation() {
         let _ = accept;
         assert_eq!(e.items(), 0, "nothing is imported while it waits");
         assert_eq!((pending.count, pending.folder.as_str(), pending.hosts.as_slice()), (1, "Open", ["(embedded image)".to_string()].as_slice()));
-        assert!(pending.site.starts_with(ext) && pending.site.contains("https://id.pinterest.com"), "{}", pending.site);
+        assert!(pending.site.starts_with("Safari extension") && pending.site.contains(ext) && pending.site.contains("https://id.pinterest.com"), "{}", pending.site);
         e.server.resolve_import(pending.id, accept);
         results.push(t.join().unwrap());
         if !accept {
