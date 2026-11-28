@@ -316,6 +316,10 @@ impl App {
     pub(crate) fn sync_compat(&mut self) {
         self.compat = None;
         self.compat_status = if !self.prefs.eagle_compat {
+            // Compatibility off also ends any browser import session.
+            if let Some(h) = &self.server {
+                h.stop_session();
+            }
             crate::prefs::CompatStatus::Off
         } else if let Some(h) = &self.server {
             let ctx = self.ctx.clone();
@@ -334,8 +338,79 @@ impl App {
         self.prefs_window.compat_status = self.compat_status.clone();
     }
 
+    /// Carries out what Preferences asked of the browser import session and
+    /// tells it how long is left.
+    fn drive_session(&mut self) {
+        let cmd = self.prefs_window.session_cmd.take();
+        let Some(h) = &self.server else {
+            self.prefs_window.session_remaining = None;
+            return;
+        };
+        let mut said = None;
+        match cmd {
+            Some(crate::prefs::SessionCmd::Start) => {
+                h.start_session(600);
+                said = Some(tr("Browser import session started"));
+            }
+            Some(crate::prefs::SessionCmd::Stop) => {
+                h.stop_session();
+                said = Some(tr("Browser import session stopped"));
+            }
+            Some(crate::prefs::SessionCmd::Approve(o)) => {
+                h.approve_session_origin(&o);
+                h.clear_blocked_origin();
+            }
+            None => {}
+        }
+        self.prefs_window.session_remaining = h.session_remaining();
+        if self.prefs_window.session_remaining.is_some() && self.prefs_window.open {
+            self.ctx.request_repaint_after(std::time::Duration::from_secs(1));
+        }
+        if let Some(m) = said {
+            self.flash(m);
+        }
+    }
+
+    /// Asks before a browser import is committed: where it comes from, what
+    /// and how many, and where it would go. Nothing is imported until Import.
+    pub(crate) fn import_confirm_modal(&mut self, ctx: &egui::Context) {
+        let Some(h) = &self.server else { return };
+        let Some(p) = h.pending_imports().into_iter().next() else { return };
+        if self.import_attention != Some(p.id) {
+            self.import_attention = Some(p.id);
+            ctx.send_viewport_cmd(egui::ViewportCommand::RequestUserAttention(egui::UserAttentionType::Informational));
+        }
+        let mut answer = None;
+        let modal = egui::Modal::new(egui::Id::unique("browser-import-confirm")).show(ctx, |ui| {
+            ui.set_width(360.0);
+            ui.label(egui::RichText::new(tr("Import from the browser?")).size(15.0));
+            ui.add_space(6.0);
+            ui.label(trf("Source: {site}", &[("site", &p.site)]));
+            ui.label(trf("Items: {count}", &[("count", &p.count)]));
+            ui.label(trf("From: {hosts}", &[("hosts", &p.hosts.join(", "))]));
+            let folder = if p.folder.is_empty() { tr("Library root").to_string() } else { p.folder.clone() };
+            ui.label(trf("Into: {folder}", &[("folder", &folder)]));
+            ui.add_space(10.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button(tr("Import")).clicked() {
+                    answer = Some(true);
+                }
+                if ui.button(tr("Cancel")).clicked() {
+                    answer = Some(false);
+                }
+            });
+        });
+        if modal.should_close() {
+            answer = Some(false);
+        }
+        if let Some(a) = answer {
+            h.resolve_import(p.id, a);
+        }
+    }
+
     /// Hands Preferences the last browser extension origin the API refused.
     pub(crate) fn poll_blocked_origin(&mut self) {
+        self.drive_session();
         if self.prefs_window.open {
             self.prefs_window.blocked_origin = self.server.as_ref().and_then(|h| h.blocked_origin());
             self.prefs_window.recent_requests = self
@@ -380,6 +455,8 @@ impl App {
         let Some(h) = &self.server else { return };
         h.set_token(&self.prefs.api_token);
         h.set_approved_origins(&self.prefs.approved_extension_origins);
+        let ctx = self.ctx.clone();
+        h.set_notify(move || ctx.request_repaint());
         h.set_preferences(self.prefs.eagle_preferences());
         h.set_history(self.recent.iter().map(|p| p.display().to_string()).collect());
         if let Some(engine) = &self.ai.engine {

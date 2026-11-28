@@ -53,6 +53,8 @@ pub struct App {
     /// The optional listener on Eagle's port (Preferences ▸ Developer), and its state.
     pub(crate) compat: Option<falcon_server::CompatListener>,
     pub(crate) compat_status: crate::prefs::CompatStatus,
+    /// The browser import last asked about, so the dock is nudged once per import.
+    pub(crate) import_attention: Option<u64>,
     pub(crate) mcp: mcp::McpState,
     /// AI Search's worker (`app/ai_search.rs`).
     pub(crate) ai: ai_search::AiSearch,
@@ -250,6 +252,7 @@ impl App {
             server: None,
             compat: None,
             compat_status: Default::default(),
+            import_attention: None,
             mcp: Default::default(),
             ai: ai_search::AiSearch::start(&cc.egui_ctx),
             ctx: cc.egui_ctx.clone(),
@@ -638,6 +641,7 @@ impl App {
         self.switch_warning_dialog(&ctx);
         self.poll_api_check();
         self.poll_blocked_origin();
+        self.import_confirm_modal(&ctx);
         self.alert_modal(&ctx);
         if self.ws.lib.is_some() {
             self.missing_modal(&ctx);

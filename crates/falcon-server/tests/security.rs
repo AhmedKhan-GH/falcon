@@ -414,3 +414,141 @@ fn request_trace_keeps_metadata_only() {
     assert!(first.flags.contains("cookie") && first.flags.contains("auth"), "presence only: {}", first.flags);
     assert!(first.fetch.starts_with("cross-site/cors"));
 }
+
+fn opaque() -> [(&'static str, &'static str); 3] {
+    [("Sec-Fetch-Site", "cross-site"), ("Sec-Fetch-Mode", "no-cors"), ("Sec-Fetch-Dest", "empty")]
+}
+
+#[test]
+fn opaque_browser_reads_need_a_session_and_are_limited() {
+    let e = env();
+    // The shape observed from Safari's extension background page (BEC-2A).
+    assert_eq!(e.send("GET", "/api/folder/listRecent", &opaque(), None).code, 403, "no session: refused");
+    e.server.start_session(600);
+    assert!(e.server.session_remaining().unwrap() > 590);
+
+    let r = e.send("GET", "/api/folder/listRecent", &opaque(), None);
+    assert_eq!(r.code, 200, "{}", r.body);
+    assert!(!r.has("access-control-allow-origin"), "no CORS grant: a page can't read the answer");
+    let names: Vec<String> = r.json()["data"].as_array().unwrap().iter().map(|f| f["name"].as_str().unwrap().to_string()).collect();
+    assert!(names.contains(&"Open".to_string()));
+    assert!(!names.contains(&"Secret".to_string()), "password-protected folders are never listed");
+    let all = e.send("GET", "/api/folder/list", &opaque(), None).json();
+    assert!(!all.to_string().contains("Secret") && !all.to_string().contains("password"), "{all}");
+    let info = e.send("GET", "/api/library/info", &opaque(), None).json();
+    assert!(!info.to_string().contains('/'), "no filesystem path: {info}");
+    assert_eq!(e.send("GET", "/api/tag/all", &opaque(), None).code, 200);
+    let hist = e.send("GET", "/api/library/history", &opaque(), None).json();
+    assert!(!hist.to_string().contains('/'), "{hist}");
+
+    // Everything else stays closed, with or without the session.
+    for (m, p, b) in [
+        ("GET", "/api/item/list", None),
+        ("GET", "/api/item/info?id=x", None),
+        ("GET", "/api/v2/library/info", None),
+        ("GET", "/api/preferences/collect/on", None),
+        ("POST", "/api/folder/create", Some(r#"{"folderName":"X"}"#)),
+        ("POST", "/api/item/addFromURL", Some(r#"{"url":"https://example.com/a.png"}"#)),
+        ("POST", "/api/library/switch", Some(r#"{"libraryPath":"/tmp/x.library"}"#)),
+    ] {
+        assert_eq!(e.send(m, p, &opaque(), b).code, 403, "{p}");
+    }
+    // A page that sends an Origin, or loads the URL as a script or image, never gets it.
+    assert_eq!(e.send("GET", "/api/folder/listRecent", &[("Origin", "https://www.pinterest.com"), ("Sec-Fetch-Site", "cross-site"), ("Sec-Fetch-Mode", "cors")], None).code, 403);
+    assert_eq!(e.send("GET", "/api/folder/listRecent", &[("Sec-Fetch-Site", "cross-site"), ("Sec-Fetch-Mode", "no-cors"), ("Sec-Fetch-Dest", "script")], None).code, 403);
+    assert_eq!(e.items(), 0);
+
+    e.server.stop_session();
+    assert_eq!(e.send("GET", "/api/folder/listRecent", &opaque(), None).code, 403, "stopped");
+    assert_eq!(e.server.session_remaining(), None);
+}
+
+#[test]
+fn sessions_expire_and_end_with_the_library() {
+    let e = env();
+    e.server.start_session(1);
+    assert_eq!(e.send("GET", "/api/folder/list", &opaque(), None).code, 200);
+    std::thread::sleep(std::time::Duration::from_millis(1300));
+    assert_eq!(e.send("GET", "/api/folder/list", &opaque(), None).code, 403, "expired");
+
+    e.server.start_session(600);
+    assert_eq!(e.send("GET", "/api/folder/list", &opaque(), None).code, 200);
+    // Serving another library ends it.
+    let tmp = tempfile::tempdir().unwrap();
+    let other: falcon_server::Shared = Arc::new(Mutex::new(Library::create(tmp.path().join("Other.library")).unwrap()));
+    e.server.set_library(other);
+    assert_eq!(e.send("GET", "/api/folder/list", &opaque(), None).code, 403, "library switched");
+    assert_eq!(e.server.session_remaining(), None);
+}
+
+#[test]
+fn session_imports_wait_for_confirmation() {
+    let _g = TEMP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let e = env();
+    let ext = "safari-web-extension://59f6ae21-9544-490d-9862-6e582c28be11";
+    let h = [("Origin", ext), ("Sec-Fetch-Site", "none")];
+    // No session: the origin can't be approved for one.
+    assert!(!e.server.approve_session_origin(ext));
+    assert_eq!(e.send("GET", "/api/folder/list", &h, None).code, 403);
+    e.server.start_session(600);
+    assert!(!e.server.approve_session_origin("https://www.pinterest.com"), "a website origin can't be approved");
+    assert_eq!(e.send("GET", "/api/folder/list", &h, None).code, 403, "not approved yet");
+    assert!(e.server.approve_session_origin(ext));
+    let r = e.send("GET", "/api/folder/list", &h, None);
+    assert_eq!(r.code, 200);
+    assert_eq!(r.header("access-control-allow-origin"), ext);
+    // Mutations and paths are not part of a session.
+    assert_eq!(e.send("POST", "/api/folder/create", &h, Some(r#"{"folderName":"X"}"#)).code, 403);
+    assert_eq!(e.send("POST", "/api/item/addFromPath", &h, Some(r#"{"path":"/etc/hosts"}"#)).code, 403);
+
+    // An import is held until the user decides in the app.
+    let port = e.port();
+    let body = json!({"url": png_data_url(), "folderId": e.open, "name": "pin"}).to_string();
+    let mut results = Vec::new();
+    for accept in [false, true] {
+        let b = body.clone();
+        let t = std::thread::spawn(move || raw(port, "POST", "/api/item/addFromURL", &[("Origin", ext), ("Sec-Fetch-Site", "none"), ("Referer", "https://id.pinterest.com/pin/1/")], Some(&b)).code);
+        let pending = loop {
+            let p = e.server.pending_imports();
+            if let Some(p) = p.first() {
+                break p.clone();
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        };
+        let _ = accept;
+        assert_eq!(e.items(), 0, "nothing is imported while it waits");
+        assert_eq!((pending.count, pending.folder.as_str(), pending.hosts.as_slice()), (1, "Open", ["(embedded image)".to_string()].as_slice()));
+        assert!(pending.site.starts_with(ext) && pending.site.contains("https://id.pinterest.com"), "{}", pending.site);
+        e.server.resolve_import(pending.id, accept);
+        results.push(t.join().unwrap());
+        if !accept {
+            assert_eq!(e.items(), 0, "declined: nothing committed");
+        }
+    }
+    assert_eq!(results, [403, 200]);
+    assert_eq!(e.items(), 1, "confirmed: imported through the normal pipeline");
+    assert!(e.server.pending_imports().is_empty());
+}
+
+#[test]
+fn browser_requests_are_rate_limited_and_batches_bounded() {
+    let _g = TEMP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let e = env();
+    let mut limited = 0;
+    for _ in 0..300 {
+        if e.send("GET", "/", &opaque(), None).code == 429 {
+            limited += 1;
+        }
+    }
+    assert!(limited > 0, "a flood is told to slow down");
+    assert_eq!(e.send("GET", "/api/library/info", &[], None).code, 200, "local programs are not limited");
+    // A batch bigger than the limit is not even offered for confirmation.
+    let ext = "chrome-extension://abcdefghijklmnop";
+    e.server.start_session(600);
+    e.server.approve_session_origin(ext);
+    std::thread::sleep(std::time::Duration::from_millis(10_500)); // the window clears
+    let items: Vec<Value> = (0..60).map(|i| json!({"url": format!("https://example.com/{i}.png")})).collect();
+    let r = e.send("POST", "/api/item/addFromURLs", &[("Origin", ext)], Some(&json!({"items": items}).to_string()));
+    assert_eq!(r.code, 403);
+    assert!(e.server.pending_imports().is_empty());
+}

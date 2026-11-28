@@ -363,6 +363,25 @@ impl RecentThumbSize {
     }
 }
 
+/// A request from the Browser Integration block that the app carries out at once.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SessionCmd {
+    Start,
+    Stop,
+    /// Let this extension origin use the running session.
+    Approve(String),
+}
+
+/// What the Developer pane shows and asks about browser integration.
+pub struct BrowserUi<'a> {
+    pub compat: &'a CompatStatus,
+    pub blocked: Option<&'a str>,
+    pub recent: &'a [String],
+    /// Seconds left in the browser import session, if one is running.
+    pub session: Option<u64>,
+    pub cmd: &'a mut Option<SessionCmd>,
+}
+
 /// What the Eagle-compatibility listener is doing, for Preferences.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum CompatStatus {
@@ -969,6 +988,9 @@ pub struct Window {
     pub blocked_origin: Option<String>,
     /// The API's latest requests, newest first, as text lines (diagnostics).
     pub recent_requests: Vec<String>,
+    /// Seconds left in the browser import session, and what Preferences asked for it.
+    pub session_remaining: Option<u64>,
+    pub session_cmd: Option<SessionCmd>,
     recorder: Recorder,
     password: PasswordForm,
     /// The theme and interface size last saved or applied; previewed
@@ -1266,7 +1288,10 @@ impl Window {
             Section::AiSearch => crate::ai_search::pane(p, d, self.ai_search.as_deref()),
             Section::AiModels => self.ai.ui(p, &mut d.prefs.ai_models),
             Section::Mcp => mcp::pane(p, d, &mut self.mcp_port_text, self.mcp_status),
-            Section::Developer => developer(p, d, &mut self.port_text, port_error, &self.compat_status, self.blocked_origin.as_deref(), &self.recent_requests),
+            Section::Developer => {
+                let ui = BrowserUi { compat: &self.compat_status, blocked: self.blocked_origin.as_deref(), recent: &self.recent_requests, session: self.session_remaining, cmd: &mut self.session_cmd };
+                developer(p, d, &mut self.port_text, port_error, ui)
+            }
         }
     }
 
@@ -1946,7 +1971,8 @@ pub fn new_token() -> String {
     format!("{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32])
 }
 
-fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<&String>, compat: &CompatStatus, blocked: Option<&str>, recent: &[String]) {
+fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<&String>, b: BrowserUi) {
+    let BrowserUi { compat, blocked, recent, session, cmd } = b;
     let pr = &mut d.prefs;
     let first = parse_port(port_text).unwrap_or(pr.api_port);
     p.block(tr_key("API token"), &["api", "token", "key", "auth", "developer", "restful"], |ui| {
@@ -2027,6 +2053,29 @@ fn developer(p: &mut Page, d: &mut Draft, port_text: &mut String, error: Option<
             note(ui, tr("Metadata only: no query strings, bodies, cookies or tokens."));
             for line in recent {
                 ui.add(egui::Label::new(RichText::new(line).monospace().size(10.0)).selectable(true));
+            }
+        }
+    });
+    p.block(tr_key("Browser Import Session"), &["browser", "session", "import", "pinterest", "extension", "folders", "temporary"], |ui| {
+        note(ui, tr("A session lets the browser extension list folder and tag names (never password-protected folders or file paths) and send images for import, which you confirm here. It ends after 10 minutes, when you stop it, when another library is shown, or when falcon quits. Any program or page that can send the same requests during a session can read those names."));
+        match session {
+            Some(left) => {
+                let time = format!("{}:{:02}", left / 60, left % 60);
+                ui.label(RichText::new(trf("Session active: {time} left.", &[("time", &time)])).size(12.0));
+                if ui.button(tr("Stop session")).clicked() {
+                    *cmd = Some(SessionCmd::Stop);
+                }
+                if let Some(o) = blocked.and_then(falcon_server::normalize_origin)
+                    && ui.button(trf("Allow {origin} for this session", &[("origin", &o)])).clicked()
+                {
+                    *cmd = Some(SessionCmd::Approve(o));
+                }
+            }
+            None => {
+                note(ui, tr("No session is active."));
+                if ui.button(tr("Start 10-minute session")).clicked() {
+                    *cmd = Some(SessionCmd::Start);
+                }
             }
         }
     });

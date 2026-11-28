@@ -69,7 +69,52 @@ struct State {
     blocked_origin: Mutex<Option<String>>,
     /// The most recent requests, metadata only (see [`TraceRow`]).
     trace: Mutex<std::collections::VecDeque<TraceRow>>,
+    /// The user-started browser import session, if any.
+    session: Mutex<Option<Session>>,
+    /// Imports waiting for the user's decision in the app.
+    pending: Mutex<Vec<PendingEntry>>,
+    next_pending: std::sync::atomic::AtomicU64,
+    /// Wakes the app when something needs its attention.
+    notify: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+    /// Times of recent requests from browsers, for the rate limit.
+    browser_hits: Mutex<std::collections::VecDeque<std::time::Instant>>,
 }
+
+/// Requests a browser client may make in [`RATE_WINDOW`] before it is told to slow down.
+const RATE_LIMIT: usize = 240;
+const RATE_WINDOW: std::time::Duration = std::time::Duration::from_secs(10);
+/// Imports waiting for a decision at once, and entries in one browser import.
+const MAX_PENDING: usize = 3;
+const MAX_BROWSER_BATCH: usize = 50;
+
+/// A browser import session: time-limited, bound to one library, and the
+/// only thing that lets an opaque browser request read folder and tag names.
+struct Session {
+    expires: std::time::Instant,
+    root: String,
+    origins: HashSet<String>,
+}
+
+/// An import from a browser waiting for the user to confirm it in Falcon.
+#[derive(Clone, Debug)]
+pub struct PendingImport {
+    pub id: u64,
+    /// Where it came from, as the browser labelled it (an origin, or "browser").
+    pub site: String,
+    pub count: usize,
+    /// Up to five source hosts.
+    pub hosts: Vec<String>,
+    /// The destination folder's name, or empty for the library root.
+    pub folder: String,
+}
+
+struct PendingEntry {
+    info: PendingImport,
+    decision: Arc<Mutex<Option<bool>>>,
+}
+
+/// How long an import waits for a decision before it is refused.
+const CONFIRM_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// What is kept of a request for diagnosing browser-integration problems:
 /// who sent it (as the browser labelled it), what it asked, and what was
@@ -120,6 +165,44 @@ impl State {
             approved_origins: Mutex::new(HashSet::new()),
             blocked_origin: Mutex::new(None),
             trace: Mutex::new(std::collections::VecDeque::new()),
+            session: Mutex::new(None),
+            pending: Mutex::new(Vec::new()),
+            next_pending: std::sync::atomic::AtomicU64::new(1),
+            notify: Mutex::new(None),
+            browser_hits: Mutex::new(std::collections::VecDeque::new()),
+        }
+    }
+
+    /// Counts a browser request; false when the client is over the limit.
+    fn rate_ok(&self) -> bool {
+        let now = std::time::Instant::now();
+        let mut h = self.browser_hits.lock().unwrap_or_else(|p| p.into_inner());
+        while h.front().is_some_and(|t| now.duration_since(*t) > RATE_WINDOW) {
+            h.pop_front();
+        }
+        if h.len() >= RATE_LIMIT {
+            return false;
+        }
+        h.push_back(now);
+        true
+    }
+
+    /// Whether the session is active for the library at `root` (an expired
+    /// one, or one for another library, is dropped), and its extension origins.
+    fn session_snapshot(&self, root: &str) -> (bool, HashSet<String>) {
+        let mut s = self.session.lock().unwrap_or_else(|p| p.into_inner());
+        if s.as_ref().is_some_and(|x| x.expires <= std::time::Instant::now() || x.root != root) {
+            *s = None;
+        }
+        match s.as_ref() {
+            Some(x) => (true, x.origins.clone()),
+            None => (false, HashSet::new()),
+        }
+    }
+
+    fn wake(&self) {
+        if let Some(f) = self.notify.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+            f();
         }
     }
 
@@ -243,6 +326,58 @@ impl Handle {
     pub fn set_approved_origins(&self, origins: &[String]) {
         let set = origins.iter().filter_map(|o| policy::normalize_origin(o)).collect();
         *self.state.approved_origins.lock().unwrap_or_else(|p| p.into_inner()) = set;
+    }
+
+    /// Starts a browser import session for the library being served, for
+    /// `secs` seconds. It ends by itself, when stopped, when another library
+    /// is served, and with the process.
+    pub fn start_session(&self, secs: u64) {
+        let root = root_of(&self.library());
+        *self.state.session.lock().unwrap_or_else(|p| p.into_inner()) =
+            Some(Session { expires: std::time::Instant::now() + std::time::Duration::from_secs(secs), root, origins: HashSet::new() });
+    }
+
+    pub fn stop_session(&self) {
+        *self.state.session.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    }
+
+    /// Seconds left in the session, or None when there is none.
+    pub fn session_remaining(&self) -> Option<u64> {
+        let root = root_of(&self.library());
+        self.state.session_snapshot(&root).0.then(|| {
+            let s = self.state.session.lock().unwrap_or_else(|p| p.into_inner());
+            s.as_ref().map_or(0, |x| x.expires.saturating_duration_since(std::time::Instant::now()).as_secs())
+        })
+    }
+
+    /// Lets one browser extension origin use the running session (and only
+    /// it). Ignored when there is no session or the origin isn't an extension's.
+    pub fn approve_session_origin(&self, origin: &str) -> bool {
+        let Some(o) = policy::normalize_origin(origin) else { return false };
+        match self.state.session.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+            Some(s) => {
+                s.origins.insert(o);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Imports waiting for the user's decision.
+    pub fn pending_imports(&self) -> Vec<PendingImport> {
+        self.state.pending.lock().unwrap_or_else(|p| p.into_inner()).iter().map(|e| e.info.clone()).collect()
+    }
+
+    /// Records the user's decision on a waiting import.
+    pub fn resolve_import(&self, id: u64, accept: bool) {
+        if let Some(e) = self.state.pending.lock().unwrap_or_else(|p| p.into_inner()).iter().find(|e| e.info.id == id) {
+            *e.decision.lock().unwrap_or_else(|p| p.into_inner()) = Some(accept);
+        }
+    }
+
+    /// Hands over what wakes the app when an import is waiting.
+    pub fn set_notify(&self, f: impl Fn() + Send + Sync + 'static) {
+        *self.state.notify.lock().unwrap_or_else(|p| p.into_inner()) = Some(Arc::new(f));
     }
 
     /// The most recent requests (newest last), metadata only, for diagnosing
@@ -423,18 +558,14 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
     let mut args = parse_query(query);
     let method = req.method().clone();
     let (host, origin, site) = (header(&req, "Host"), header(&req, "Origin"), header(&req, "Sec-Fetch-Site"));
+    let (mode, dest) = (header(&req, "Sec-Fetch-Mode"), header(&req, "Sec-Fetch-Dest"));
     let mut row = TraceRow {
         secs: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()),
         port,
         method: method.to_string(),
         path: path.chars().take(80).collect(),
         origin: origin.as_deref().map(origin_only).unwrap_or_default(),
-        fetch: format!(
-            "{}/{}/{}",
-            site.as_deref().unwrap_or("-"),
-            header(&req, "Sec-Fetch-Mode").as_deref().unwrap_or("-"),
-            header(&req, "Sec-Fetch-Dest").as_deref().unwrap_or("-")
-        ),
+        fetch: format!("{}/{}/{}", site.as_deref().unwrap_or("-"), mode.as_deref().unwrap_or("-"), dest.as_deref().unwrap_or("-")),
         referer: header(&req, "Referer").as_deref().map(origin_only).unwrap_or_default(),
         flags: [("Cookie", "cookie"), ("Authorization", "auth"), ("Access-Control-Request-Headers", "acrh"), ("Access-Control-Request-Method", "acrm")]
             .iter()
@@ -448,12 +579,13 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
         why: String::new(),
     };
     let host_ok = host.as_deref().is_some_and(|h| policy::host_allowed(h, port));
-    let kind = policy::kind(origin.as_deref(), site.as_deref(), port);
+    let kind = policy::kind(origin.as_deref(), policy::Fetch { site: site.as_deref(), mode: mode.as_deref(), dest: dest.as_deref() }, port);
     let approved = state.approved_origins.lock().unwrap_or_else(|p| p.into_inner()).clone();
     row.caller = match &kind {
         policy::Kind::Local => "local".into(),
         policy::Kind::SameOrigin => "same-origin".into(),
         policy::Kind::Extension(_) => "extension".into(),
+        policy::Kind::Opaque => "opaque".into(),
         policy::Kind::Website => "website".into(),
     };
 
@@ -504,11 +636,18 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
         return state.record(row);
     }
     let token_ok = state.token_valid(token.as_deref());
+    if !token_ok && !matches!(kind, policy::Kind::Local | policy::Kind::SameOrigin) && !state.rate_ok() {
+        row.status = send(req, Reply::Status(429, "Too many requests."), None);
+        row.why = "rate limited".into();
+        return state.record(row);
+    }
 
     // Then the origin policy (BEC-1B): a web page gets discovery only, a
     // browser extension only what the user approved, never filesystem paths.
     let tier = policy::tier(matches!(method, Method::Post | Method::Put), &path, &args);
-    let mut verdict = policy::decide(tier, &kind, &approved, token_ok);
+    let (session_on, session_origins) = state.session_snapshot(&root_of(lib));
+    let session = policy::SessionView { active: session_on, origins: Some(&session_origins) };
+    let mut verdict = policy::decide(tier, &kind, &approved, token_ok, &path, &session);
     if verdict == policy::Verdict::Allow
         && !token_ok
         && policy::is_switch(&path)
@@ -530,15 +669,134 @@ fn handle(lib: &Shared, state: &State, port: u16, mut req: Request) {
         return state.record(row);
     }
 
+    let mut why = "served";
+    if verdict == policy::Verdict::Confirm {
+        let site = match &kind {
+            policy::Kind::Extension(o) => o.clone(),
+            _ => "browser".to_string(),
+        };
+        let referer = if row.referer.is_empty() { String::new() } else { format!(" (page {})", row.referer) };
+        if !confirm_import(lib, state, &format!("{site}{referer}"), &path, &args) {
+            row.status = send(req, Reply::Status(403, "The import was not confirmed in Falcon."), cors);
+            row.why = "import not confirmed".into();
+            return state.record(row);
+        }
+        why = "import confirmed";
+    }
     let reply = match path.as_str() {
+        _ if verdict == policy::Verdict::Session => {
+            why = "session read";
+            session_reply(lib, state, &path)
+        }
         "/" | "/api/application/info" | "/api/v2/app/info" if method == Method::Get => discovery(state, &path, verdict == policy::Verdict::Allow),
         "/item" | "/folder" | "/smart-folder" => link_redirect(&lock(lib), &path, s(&args, "id")),
         "/api/v2/playground" => Reply::Page(PLAYGROUND),
         _ => route(lib, state, &method, &path, &args),
     };
     row.status = send(req, reply, cors);
-    row.why = "served".into();
+    row.why = why.into();
     state.record(row);
+}
+
+/// The names of the folders a browser session may show: no password-protected
+/// folder and nothing inside one, and only the fields a picker needs.
+fn session_folder(f: &Folder) -> Option<Value> {
+    if f.is_locked() {
+        return None;
+    }
+    let kids: Vec<Value> = f.children.iter().filter_map(session_folder).collect();
+    Some(json!({"id": f.id, "name": f.name, "description": "", "children": kids, "iconColor": f.icon_color, "icon": f.icon}))
+}
+
+fn blocked_folder_ids(folders: &[Folder], out: &mut HashSet<String>, under_locked: bool) {
+    for f in folders {
+        let locked = under_locked || f.is_locked();
+        if locked {
+            out.insert(f.id.clone());
+        }
+        blocked_folder_ids(&f.children, out, locked);
+    }
+}
+
+/// What a browser import session gets for its allowed read routes: folder
+/// and tag names with opaque ids, the library's name instead of its path.
+fn session_reply(lib: &Shared, state: &State, path: &str) -> Reply {
+    if path.starts_with("/api/tag/") {
+        return route(lib, state, &Method::Get, path, &Map::new());
+    }
+    let l = lock(lib);
+    let name = library_name(&l);
+    match path {
+        "/api/folder/list" => Reply::Data(Value::Array(l.metadata.folders.iter().filter_map(session_folder).collect())),
+        "/api/folder/listRecent" => {
+            let mut blocked = HashSet::new();
+            blocked_folder_ids(&l.metadata.folders, &mut blocked, false);
+            let flat: Vec<Value> = l
+                .all_folders()
+                .into_iter()
+                .filter(|f| !blocked.contains(&f.id))
+                .take(16)
+                .map(|f| json!({"id": f.id, "name": f.name, "description": "", "children": [], "iconColor": f.icon_color, "icon": f.icon}))
+                .collect();
+            Reply::Data(Value::Array(flat))
+        }
+        "/api/library/info" => Reply::Data(json!({"library": {"path": name, "name": name}})),
+        "/api/library/history" => Reply::Data(json!([name])),
+        _ => Reply::Status(403, "Not available in a browser import session."),
+    }
+}
+
+/// Holds an import from a browser until the user decides in the app.
+/// Nothing is downloaded or committed before that. No decision within
+/// [`CONFIRM_WAIT`] counts as no.
+fn confirm_import(lib: &Shared, state: &State, site: &str, path: &str, args: &Map<String, Value>) -> bool {
+    let items: Vec<&Map<String, Value>> = match args.get("items") {
+        Some(Value::Array(a)) => a.iter().filter_map(Value::as_object).collect(),
+        _ => vec![args],
+    };
+    if items.len() > MAX_BROWSER_BATCH || state.pending.lock().unwrap_or_else(|p| p.into_inner()).len() >= MAX_PENDING {
+        return false;
+    }
+    let mut hosts: Vec<String> = Vec::new();
+    for e in &items {
+        let host = match (s(e, "url"), e.get("base64")) {
+            (Some(u), _) if u.starts_with("data:") => "(embedded image)".to_string(),
+            (Some(u), _) => u.split("://").nth(1).and_then(|r| r.split(['/', '?', '#']).next()).unwrap_or("?").chars().take(80).collect(),
+            (None, Some(_)) => "(embedded image)".to_string(),
+            _ => "?".to_string(),
+        };
+        if !hosts.contains(&host) && hosts.len() < 5 {
+            hosts.push(host);
+        }
+    }
+    let folder = {
+        let l = lock(lib);
+        let mut ids = folder_ids(&l, args);
+        if ids.is_empty() {
+            ids = items.iter().flat_map(|e| folder_ids(&l, e)).collect();
+        }
+        ids.first().and_then(|id| l.all_folders().into_iter().find(|f| f.id == *id).map(|f| f.name.clone())).unwrap_or_default()
+    };
+    let _ = path;
+    let decision = Arc::new(Mutex::new(None));
+    let id = state.next_pending.fetch_add(1, Ordering::SeqCst);
+    state.pending.lock().unwrap_or_else(|p| p.into_inner()).push(PendingEntry {
+        info: PendingImport { id, site: site.chars().take(120).collect(), count: items.len().max(1), hosts, folder },
+        decision: decision.clone(),
+    });
+    state.wake();
+    let start = std::time::Instant::now();
+    let answer = loop {
+        if let Some(a) = *decision.lock().unwrap_or_else(|p| p.into_inner()) {
+            break a;
+        }
+        if start.elapsed() >= CONFIRM_WAIT {
+            break false;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    };
+    state.pending.lock().unwrap_or_else(|p| p.into_inner()).retain(|e| e.info.id != id);
+    answer
 }
 
 fn preflight(req: Request, ok: bool, origin: Option<&str>, discovery: bool) -> u16 {
@@ -1191,6 +1449,7 @@ fn unlocked_route(lib: &Shared, state: &State, path: &str, args: &Map<String, Va
                 Ok(new) => {
                     state.remember(new.root().display().to_string());
                     *lock(lib) = new;
+                    *state.session.lock().unwrap_or_else(|p| p.into_inner()) = None;
                     if v2 { Reply::Data(json!(true)) } else { Reply::Empty }
                 }
                 Err(e) if v2 => Reply::Error(e),
