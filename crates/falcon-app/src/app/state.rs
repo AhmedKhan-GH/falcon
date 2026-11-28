@@ -499,6 +499,8 @@ pub(crate) struct Workspace {
     pub(crate) home_recent_imports: Vec<String>,
     /// Session cache of smart-folder Quick Access results (count, cover asset id) for Home.
     pub(crate) home_smart: std::collections::HashMap<String, (usize, Option<String>)>,
+    /// Home's Quick Access shows the cards that did not fit ("View all"); not saved.
+    pub(crate) home_quick_all: bool,
     /// Folder item counts and sidebar counts, computed once per change of the
     /// library instead of every frame (each walks every item).
     pub(crate) counts_cache: std::sync::Mutex<Option<CountsCache<std::collections::HashMap<String, usize>>>>,
@@ -566,6 +568,7 @@ impl Workspace {
             home_mosaics: std::collections::HashMap::new(),
             home_recent_imports: Vec::new(),
             home_smart: std::collections::HashMap::new(),
+            home_quick_all: false,
             counts_cache: std::sync::Mutex::new(None),
             nav_cache: std::sync::Mutex::new(None),
             mutation_count: 0,
