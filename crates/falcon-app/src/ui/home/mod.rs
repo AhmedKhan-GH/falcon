@@ -27,6 +27,15 @@ struct CardDims {
     thumb_h: f32,
 }
 
+/// Width of the column of secondary Quick Access cards beside the Hero. It fills the row
+/// on ordinary windows but stops growing on very wide ones, where cards hundreds of
+/// pixels wide would hold only a name and a count.
+fn quick_secondary_width(content_w: f32, hero_w: f32, secondary: usize) -> f32 {
+    let room = (content_w - hero_w - 16.0).max(100.0);
+    let cap = if secondary <= 2 { 520.0 } else { 760.0 };
+    room.min(cap)
+}
+
 /// An asset may be a Home cover when it is a live, previewable item outside
 /// locked folders; anything else (deleted, missing) falls back gracefully.
 fn valid_cover<'a>(item: Option<&'a Item>, locked: &std::collections::HashSet<&str>) -> Option<&'a Item> {
@@ -569,7 +578,7 @@ impl App {
         } else if content_w >= 720.0 {
             // Wide layout: Left primary Hero, Right supporting secondary cards
             let hero_w = ((content_w - 16.0) * 0.50).clamp(320.0, 480.0);
-            let sec_w = content_w - hero_w - 16.0;
+            let sec_w = quick_secondary_width(content_w, hero_w, secondary.len());
             let hero_h = 150.0;
 
             ui.horizontal(|ui| {
@@ -1364,5 +1373,15 @@ mod tests {
         in_locked.folders = vec!["LOCKED".into()];
         let locked: std::collections::HashSet<&str> = ["LOCKED"].into_iter().collect();
         assert!(valid_cover(Some(&in_locked), &locked).is_none(), "locked folder asset falls back");
+    }
+
+    #[test]
+    fn secondary_quick_access_cards_stop_growing_on_wide_windows() {
+        // Ordinary window: fills the row beside the Hero.
+        assert_eq!(quick_secondary_width(900.0, 400.0, 3), 900.0 - 400.0 - 16.0);
+        // 2000 px wide: capped, so cards stay readable.
+        assert_eq!(quick_secondary_width(1900.0, 480.0, 4), 760.0);
+        assert_eq!(quick_secondary_width(1900.0, 480.0, 2), 520.0);
+        assert!(quick_secondary_width(300.0, 480.0, 4) >= 100.0);
     }
 }
