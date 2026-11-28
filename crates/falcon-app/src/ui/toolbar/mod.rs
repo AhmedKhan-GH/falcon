@@ -113,7 +113,7 @@ impl App {
             let tip = self.shortcuts.tooltip(ui.ctx(), tr("Refresh"), Command::Reshuffle);
             if icon_button(ui, Pos2::new(ix, cy), ic::ARROW_CLOCKWISE, 18.0, true, &tip).clicked() {
                 let ctx = ui.ctx().clone();
-                self.run_command(&ctx, Command::Reshuffle);
+                self.defer_command(&ctx, Command::Reshuffle);
             }
             ix -= 26.0;
         }

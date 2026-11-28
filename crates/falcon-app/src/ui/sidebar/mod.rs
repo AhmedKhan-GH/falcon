@@ -840,7 +840,7 @@ impl App {
             let keys = self.shortcut_text(ui.ctx(), crate::shortcuts::Command::ToggleSubfolders);
             let mark = if self.display.subfolders { crate::icons::CHECK } else { " " };
             if ui.add(egui::Button::new(format!("{mark}  {}", tr("Show Subfolder Content"))).shortcut_text(keys)).clicked() {
-                self.run_command(&ui.ctx().clone(), crate::shortcuts::Command::ToggleSubfolders);
+                self.defer_command(&ui.ctx().clone(), crate::shortcuts::Command::ToggleSubfolders);
             }
             ui.separator();
             if ui.add_enabled(!shut, egui::Button::new(RichText::new(tr("Delete Folder")).color(t::p().icon_red))).clicked() {

@@ -465,6 +465,13 @@ impl App {
         }
     }
 
+    /// Runs `cmd` after this frame's draw instead of now: for a menu entry drawn
+    /// inside the frame, where the library is locked.
+    pub(crate) fn defer_command(&mut self, ctx: &egui::Context, cmd: crate::shortcuts::Command) {
+        self.shell.deferred_command = Some(cmd);
+        ctx.request_repaint();
+    }
+
     /// Runs one command, from a key press or a menu click. A command that
     /// can't act now (`menu::enabled`) does nothing. Called before the
     /// frame locks the library, which some commands lock themselves.

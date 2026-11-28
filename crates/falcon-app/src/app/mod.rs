@@ -491,6 +491,9 @@ impl eframe::App for App {
             #[cfg(not(target_os = "macos"))]
             self.menu_bar.show(ui);
             self.draw(ui, frame);
+            if let Some(cmd) = self.shell.deferred_command.take() {
+                self.run_command(&ctx, cmd);
+            }
         }
         self.quit_dialog(&ctx);
         // The web page sits over the viewer only in frames that asked for it.

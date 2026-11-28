@@ -101,7 +101,7 @@ impl App {
         if let Some(pick) = chosen {
             egui::Popup::close_id(&ctx, id);
             match pick {
-                Pick::Command(cmd) => self.run_command(&ctx, cmd),
+                Pick::Command(cmd) => self.defer_command(&ctx, cmd),
                 Pick::Duplicates(range) => self.find_duplicates_in(range),
                 Pick::Document(template) => {
                     let folders = self.scope_folders();
